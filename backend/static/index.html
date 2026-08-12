@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VisionCorrect Demo</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1115; --card:#181b22; --line:#2a2f3a;
+          --fg:#e8eaed; --muted:#9aa0ab; --accent:#5b9dff; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+         background:var(--bg); color:var(--fg); }
+  header { padding:20px 24px; border-bottom:1px solid var(--line); }
+  h1 { margin:0; font-size:20px; }
+  .sub { color:var(--muted); font-size:13px; margin-top:4px; }
+  .wrap { display:grid; grid-template-columns:300px 1fr; gap:0; min-height:calc(100vh - 66px); }
+  .panel { padding:20px 24px; }
+  .controls { border-right:1px solid var(--line); }
+  label { display:block; font-size:12px; color:var(--muted); margin:14px 0 4px; }
+  input[type=range] { width:100%; }
+  .row { display:flex; gap:8px; }
+  .row > div { flex:1; }
+  .val { font-variant-numeric:tabular-nums; color:var(--fg); float:right; }
+  button { background:var(--accent); color:#031024; border:0; padding:10px 14px;
+           border-radius:8px; font-weight:600; cursor:pointer; margin-top:16px; width:100%; }
+  button.secondary { background:#232838; color:var(--fg); }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  figure { margin:0; background:var(--card); border:1px solid var(--line); border-radius:10px;
+           overflow:hidden; }
+  figure img { width:100%; display:block; background:#fff; }
+  figcaption { padding:8px 10px; font-size:12px; color:var(--muted); }
+  figcaption b { color:var(--fg); }
+  .meta { font-size:12px; color:var(--muted); margin-top:12px; line-height:1.6; }
+  .disclaimer { font-size:11px; color:var(--muted); margin-top:18px; border-top:1px dashed var(--line);
+                padding-top:12px; }
+  select, input[type=file] { width:100%; background:#232838; color:var(--fg);
+           border:1px solid var(--line); border-radius:6px; padding:6px; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>VisionCorrect — interactive demo</h1>
+  <div class="sub">Pre-distort an image so a blurry eye perceives it sharply. The "what your eye sees" panels simulate the prescription so you can judge the effect on a normal screen.</div>
+</header>
+
+<div class="wrap">
+  <div class="panel controls">
+    <label>Test image</label>
+    <select id="preset">
+      <option value="eyechart">Eye chart (built-in)</option>
+      <option value="text">Text page (built-in)</option>
+      <option value="upload">Upload your own…</option>
+    </select>
+    <input type="file" id="file" accept="image/*" style="display:none;margin-top:8px" />
+
+    <label>Sphere (D) <span class="val" id="sphereV">-2.50</span></label>
+    <input type="range" id="sphere" min="-6" max="0" step="0.25" value="-2.5" />
+
+    <label>Cylinder (D) <span class="val" id="cylV">-1.00</span></label>
+    <input type="range" id="cyl" min="-4" max="0" step="0.25" value="-1.0" />
+
+    <label>Axis (°) <span class="val" id="axisV">110</span></label>
+    <input type="range" id="axis" min="0" max="180" step="5" value="110" />
+
+    <div class="row">
+      <div>
+        <label>Distance (cm) <span class="val" id="distV">35</span></label>
+        <input type="range" id="dist" min="20" max="80" step="1" value="35" />
+      </div>
+    </div>
+
+    <label>Correction strength <span class="val" id="csV">1.00</span></label>
+    <input type="range" id="cs" min="0" max="1.5" step="0.05" value="1.0" />
+
+    <label>Contrast headroom <span class="val" id="drV">0.55</span></label>
+    <input type="range" id="dr" min="0.25" max="1" step="0.05" value="0.55" />
+
+    <label>Regularization (K) <span class="val" id="regV">0.012</span></label>
+    <input type="range" id="reg" min="0.002" max="0.05" step="0.002" value="0.012" />
+
+    <button id="run">Render</button>
+    <div class="meta" id="meta"></div>
+    <div class="disclaimer">Experimental vision-adaptive display technology. Not a diagnostic
+      device or a replacement for prescribed corrective eyewear.</div>
+  </div>
+
+  <div class="panel">
+    <div class="grid">
+      <figure><img id="img_original" /><figcaption><b>1. Original</b> — what we want you to see</figcaption></figure>
+      <figure><img id="img_uncorrected" /><figcaption><b>2. Eye view, correction OFF</b> — blurry</figcaption></figure>
+      <figure><img id="img_precompensated" /><figcaption><b>3. Shown on screen</b> — pre-distorted (looks odd)</figcaption></figure>
+      <figure><img id="img_corrected" /><figcaption><b>4. Eye view, correction ON</b> — perceived result</figcaption></figure>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const bind = (id, vid, fmt=(x=>x)) => { const el=$(id); const upd=()=>$(vid).textContent=fmt(el.value); el.addEventListener('input',upd); upd(); };
+bind('sphere','sphereV',v=>Number(v).toFixed(2));
+bind('cyl','cylV',v=>Number(v).toFixed(2));
+bind('axis','axisV',v=>v);
+bind('dist','distV',v=>v);
+bind('cs','csV',v=>Number(v).toFixed(2));
+bind('dr','drV',v=>Number(v).toFixed(2));
+bind('reg','regV',v=>Number(v).toFixed(3));
+
+$('preset').addEventListener('change', () => {
+  $('file').style.display = $('preset').value === 'upload' ? 'block' : 'none';
+});
+
+// Build a synthetic test image on a canvas so the demo works with no assets.
+function presetImage(kind) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 512;
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0,0,512,512); x.fillStyle = '#000';
+  x.textAlign = 'center';
+  if (kind === 'text') {
+    x.textAlign = 'left';
+    const lines = ['The quick brown fox jumps','over the lazy dog. 1234567890',
+      'Pre-compensation trades a little','contrast for a lot of sharpness.',
+      'Smaller text is the real test —','can you still read this line?'];
+    let y = 70; let s = 40;
+    lines.forEach((L,i)=>{ x.font = `${s}px Georgia`; x.fillText(L, 30, y); y += s+14; s = Math.max(20, s-3); });
+  } else {
+    const rows = [['E',120],['F P',78],['T O Z',54],['L P E D',40],['P E C F D',30]];
+    let y = 40;
+    rows.forEach(([t,s])=>{ x.font = `bold ${s}px Arial`; x.fillText(t, 256, y+s*0.8); y += s+22; });
+    for (let i=0,xx=40; xx<472; xx+=10,i++){ x.fillRect(xx,452,i%2?2:1,40); }
+  }
+  return new Promise(res => c.toBlob(res, 'image/png'));
+}
+
+async function currentBlob() {
+  const kind = $('preset').value;
+  if (kind === 'upload' && $('file').files[0]) return $('file').files[0];
+  return presetImage(kind === 'text' ? 'text' : 'eyechart');
+}
+
+async function render() {
+  $('run').textContent = 'Rendering…'; $('run').disabled = true;
+  try {
+    const blob = await currentBlob();
+    const fd = new FormData();
+    fd.append('image', blob, 'input.png');
+    fd.append('sphere', $('sphere').value);
+    fd.append('cylinder', $('cyl').value);
+    fd.append('axis', $('axis').value);
+    fd.append('viewing_distance_mm', String($('dist').value * 10));
+    fd.append('correction_strength', $('cs').value);
+    fd.append('dynamic_range', $('dr').value);
+    fd.append('regularization', $('reg').value);
+    const r = await fetch('/v1/demo', { method:'POST', body: fd });
+    if (!r.ok) throw new Error('API ' + r.status);
+    const d = await r.json();
+    img_original.src = d.original;
+    img_uncorrected.src = d.uncorrected;
+    img_precompensated.src = d.precompensated;
+    img_corrected.src = d.corrected;
+    $('meta').innerHTML =
+      `estimated blur: σx=${d.blur.sigma_x}px σy=${d.blur.sigma_y}px @ ${d.blur.angle_degrees}°<br>` +
+      `PSF ${d.blur.psf_width}×${d.blur.psf_height} · clipped ${(d.blur.clipped_fraction*100).toFixed(1)}% · ${d.processing_ms} ms`;
+  } catch (e) {
+    $('meta').textContent = 'Error: ' + e.message;
+  } finally {
+    $('run').textContent = 'Render'; $('run').disabled = false;
+  }
+}
+$('run').addEventListener('click', render);
+window.addEventListener('load', render);
+</script>
+</body>
+</html>

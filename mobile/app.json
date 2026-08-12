@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "VisionCorrect",
+    "slug": "visioncorrect",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "splash": { "backgroundColor": "#0f1115" },
+    "ios": { "supportsTablet": true },
+    "android": {},
+    "extra": {
+      "apiUrl": "http://localhost:8000"
+    }
+  }
+}

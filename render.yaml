@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: visioncorrect-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+
+# Alternative (native Python runtime instead of Docker):
+#   - type: web
+#     name: visioncorrect-api
+#     runtime: python
+#     rootDir: backend
+#     buildCommand: pip install -r requirements.txt
+#     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+#     healthCheckPath: /health
