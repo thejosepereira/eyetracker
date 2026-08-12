@@ -15,6 +15,10 @@ from .psf import generate_psf, generate_psf_auto
 from .deconvolution import wiener_precompensate, apply_psf
 from .calibration import CalibrationProfile, PairwiseStaircase, ChromaticCompensation
 from .renderer import VisionRenderer, RenderResult
+from .adaptive_lens import (
+    TunableLens, LensSpec, LENS_SPECS, LensCommand, SelfRefraction,
+    AdaptiveController, near_add_d, max_accommodation_d,
+)
 
 __all__ = [
     "OpticalModel", "EyePrescription", "DisplayParams", "BlurParams",
@@ -22,6 +26,8 @@ __all__ = [
     "wiener_precompensate", "apply_psf",
     "CalibrationProfile", "PairwiseStaircase", "ChromaticCompensation",
     "VisionRenderer", "RenderResult",
+    "TunableLens", "LensSpec", "LENS_SPECS", "LensCommand", "SelfRefraction",
+    "AdaptiveController", "near_add_d", "max_accommodation_d",
 ]
 
 __version__ = "0.1.0"

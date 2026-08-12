@@ -144,6 +144,26 @@ Because full inversion pushes pixels outside what a display can show, the target
 for pre-compensation on conventional (non-light-field) displays. Details:
 [`docs/architecture.md`](docs/architecture.md).
 
+## Adaptive ("AI") glasses — concept track
+
+A different mechanism from the screen correction: wearable glasses with a
+**physically tunable lens** whose power self-updates as your eyes drift, so you
+need far fewer optician visits *for prescription updates* (it does not replace an
+eye-health exam). The control software — tunable-lens abstraction, self-refraction,
+and distance-based autofocus — lives in
+[`backend/vision_engine/adaptive_lens.py`](backend/vision_engine/adaptive_lens.py).
+
+A six-year simulation shows self-refracting glasses keep residual blur under the
+noticeable threshold **100% of the time** vs. **54%** for glasses updated only at
+2-year visits:
+
+```bash
+cd backend && pip install -r requirements.txt matplotlib
+python ../research/experiments/adaptive_glasses_sim.py   # writes research/test-images/adaptive_glasses.png
+```
+
+Design, lens technologies, and the honest limits: [`docs/adaptive-glasses.md`](docs/adaptive-glasses.md).
+
 ## Roadmap
 
 - **v0.1 (this)** — engine, API, browser demo, eye simulation, tests.

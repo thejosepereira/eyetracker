@@ -16,6 +16,16 @@ limitations and validation plan.
   python ../research/experiments/prove_correction.py
   ```
 
+- **`experiments/adaptive_glasses_sim.py`** — simulates a prescription drifting
+  over six years and compares residual blur for self-refracting adaptive glasses
+  vs. static glasses updated only at doctor visits. Saves
+  `test-images/adaptive_glasses.png`. Needs `matplotlib`.
+
+  ```bash
+  cd backend && pip install -r requirements.txt matplotlib
+  python ../research/experiments/adaptive_glasses_sim.py
+  ```
+
 ## Directories
 
 - `experiments/` — runnable scripts.

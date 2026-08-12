@@ -21,3 +21,4 @@ backend/outputs/
 # Research generated images (keep the showcase comparison committed)
 research/test-images/*.png
 !research/test-images/comparison.png
+!research/test-images/adaptive_glasses.png
