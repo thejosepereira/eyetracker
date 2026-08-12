@@ -40,6 +40,8 @@ jobs:
           cp standalone/distance.html _site/
 
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true   # turn Pages on via the API if not already enabled
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
