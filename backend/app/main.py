@@ -44,5 +44,11 @@ async def index() -> FileResponse:
     return FileResponse(os.path.join(_STATIC_DIR, "index.html"))
 
 
+@app.get("/test", include_in_schema=False)
+async def test_harness() -> FileResponse:
+    """Blinded 3-condition human test harness."""
+    return FileResponse(os.path.join(_STATIC_DIR, "test.html"))
+
+
 if os.path.isdir(_STATIC_DIR):
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")

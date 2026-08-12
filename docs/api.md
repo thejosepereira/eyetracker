@@ -27,6 +27,7 @@ Returns the **pre-compensated image** to display on screen.
 | `regularization` | float | `0.012` | Wiener K (higher = softer/safer) |
 | `dynamic_range` | float | `0.55` | target contrast headroom (lower = sharper, flatter) |
 | `contrast_boost` | float | `1.0` | final perceptual contrast |
+| `precompensate` | bool | `true` | `false` = contrast reduction only, no inverse filter (study control condition B) |
 
 Query param `response`:
 - `png` (default) → raw `image/png` body.

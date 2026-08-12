@@ -58,8 +58,15 @@ class VisionRenderer:
         display: DisplayParams,
         viewing_distance_mm: float,
         calibration: CalibrationProfile | None = None,
+        precompensate: bool = True,
     ) -> RenderResult:
-        """image: uint8 HxWx3 (sRGB). Returns a RenderResult."""
+        """image: uint8 HxWx3 (sRGB). Returns a RenderResult.
+
+        `precompensate=False` applies the same contrast reduction (dynamic range)
+        but skips the inverse filter. This yields the study's *control* condition:
+        contrast-matched to the corrected image but without the pre-distortion, so
+        a real-human test can isolate the sharpening from the contrast change.
+        """
         cal = calibration or CalibrationProfile()
         if image.ndim == 2:
             image = np.stack([image] * 3, axis=-1)
@@ -89,7 +96,10 @@ class VisionRenderer:
             chan_psf = psf if chroma[c] == 1.0 else generate_psf_auto(
                 blur.sigma_x * chroma[c], blur.sigma_y * chroma[c], blur.angle_degrees
             )
-            pre = wiener_precompensate(target, chan_psf, regularization=cal.regularization)
+            if precompensate:
+                pre = wiener_precompensate(target, chan_psf, regularization=cal.regularization)
+            else:
+                pre = target  # control: contrast-reduced only, no inverse filter
 
             clipped += float(np.mean((pre < 0.0) | (pre > 1.0)))
             managed = np.clip(0.5 + (pre - 0.5) * cal.contrast_boost, 0.0, 1.0)

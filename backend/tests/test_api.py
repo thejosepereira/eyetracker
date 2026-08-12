@@ -60,6 +60,26 @@ def test_demo_returns_four_panels():
         assert body[key].startswith("data:image/png;base64,")
 
 
+def test_control_condition_skips_precompensation():
+    # precompensate=false should produce a *different* image than precompensate=true
+    # (the control condition B for the human test harness).
+    img = _png_bytes(160, 160)
+    common = {"sphere": "-2.5", "cylinder": "-1.0", "axis": "110", "dynamic_range": "0.55"}
+    corrected = client.post(
+        "/v1/correct", data={**common, "precompensate": "true"},
+        files={"image": ("in.png", img, "image/png")}).content
+    control = client.post(
+        "/v1/correct", data={**common, "precompensate": "false"},
+        files={"image": ("in.png", img, "image/png")}).content
+    assert corrected != control
+
+
+def test_test_harness_served():
+    r = client.get("/test")
+    assert r.status_code == 200
+    assert "Human Test Harness" in r.text
+
+
 def test_invalid_image_rejected():
     r = client.post(
         "/v1/correct",

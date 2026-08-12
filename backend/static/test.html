@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VisionCorrect — Human Test Harness</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1115; --card:#181b22; --line:#2a2f3a;
+          --fg:#e8eaed; --muted:#9aa0ab; --accent:#5b9dff; --good:#37d67a; --bad:#ff6b6b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:var(--bg); color:var(--fg); }
+  header { padding:16px 24px; border-bottom:1px solid var(--line); }
+  h1 { margin:0; font-size:18px; }
+  .sub { color:var(--muted); font-size:13px; margin-top:3px; }
+  main { max-width:760px; margin:0 auto; padding:24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:16px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:12px 0 4px; }
+  input, select { width:100%; background:#232838; color:var(--fg); border:1px solid var(--line);
+                  border-radius:6px; padding:8px; font-size:14px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:120px; }
+  button { background:var(--accent); color:#031024; border:0; padding:12px 16px; border-radius:8px;
+           font-weight:700; cursor:pointer; font-size:15px; }
+  button.ghost { background:#232838; color:var(--fg); border:1px solid var(--line); font-weight:600; }
+  button:disabled { opacity:.5; cursor:default; }
+  .banner { background:#2a2f3a; border-radius:8px; padding:10px 14px; font-size:13px; color:var(--fg); margin-bottom:16px; }
+  .stimWrap { display:flex; flex-direction:column; align-items:center; gap:20px; padding:20px 0; }
+  #stim { background:#fff; image-rendering:auto; border-radius:4px; }
+  .keys { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; width:100%; max-width:420px; }
+  .keys button { font-size:22px; font-weight:800; padding:14px 0; background:#232838; color:var(--fg); border:1px solid var(--line); }
+  .keys button:hover { border-color:var(--accent); }
+  .progress { height:6px; background:#232838; border-radius:3px; overflow:hidden; margin:8px 0 0; }
+  .progress > div { height:100%; background:var(--accent); width:0; transition:width .2s; }
+  table { width:100%; border-collapse:collapse; margin-top:8px; }
+  th, td { text-align:left; padding:8px; border-bottom:1px solid var(--line); font-size:14px; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; }
+  .muted { color:var(--muted); font-size:12px; }
+  .big { font-size:28px; font-weight:800; }
+  .disclaimer { color:var(--muted); font-size:11px; margin-top:16px; line-height:1.5; border-top:1px dashed var(--line); padding-top:12px; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>VisionCorrect — Human Test Harness</h1>
+  <div class="sub">Blinded, 3-condition letter-identification study. A = original · B = contrast-reduced only (control) · C = full correction.</div>
+</header>
+
+<main>
+  <!-- ===================== SETUP ===================== -->
+  <section id="setup">
+    <div class="banner">
+      <b>Before you start:</b> take glasses/contacts off, cover the eye you are <i>not</i> testing,
+      and keep the screen at the fixed distance below. Test one eye at a time using that eye's prescription.
+    </div>
+    <div class="card">
+      <div class="row">
+        <div><label>Subject ID</label><input id="subject" value="S01" /></div>
+        <div><label>Eye under test</label>
+          <select id="eye"><option value="right">Right (OD)</option><option value="left">Left (OS)</option></select>
+        </div>
+      </div>
+      <div class="row">
+        <div><label>Sphere (D)</label><input id="sphere" type="number" step="0.25" value="-2.5" /></div>
+        <div><label>Cylinder (D)</label><input id="cyl" type="number" step="0.25" value="-1.0" /></div>
+        <div><label>Axis (°)</label><input id="axis" type="number" step="5" value="110" /></div>
+      </div>
+      <div class="row">
+        <div><label>Viewing distance (cm)</label><input id="dist" type="number" value="35" /></div>
+        <div><label>Screen PPI</label><input id="ppi" type="number" value="264" /></div>
+        <div><label>Letter box (px) — difficulty</label><input id="box" type="number" value="120" /></div>
+      </div>
+      <div class="row">
+        <div><label>Trials per condition</label><input id="trials" type="number" value="15" /></div>
+        <div><label>Correction strength</label><input id="cs" type="number" step="0.05" value="1.0" /></div>
+        <div><label>Contrast headroom (DR)</label><input id="dr" type="number" step="0.05" value="0.55" /></div>
+        <div><label>Regularization (K)</label><input id="reg" type="number" step="0.002" value="0.012" /></div>
+      </div>
+      <div style="margin-top:16px; display:flex; gap:10px;">
+        <button id="calib" class="ghost">Preview a letter (calibrate size)</button>
+        <button id="start">Start blinded test</button>
+      </div>
+      <div class="muted" id="calibHint" style="margin-top:10px"></div>
+    </div>
+    <div class="disclaimer">
+      Experimental technology, not a medical device. Aim to set the letter box so your uncorrected (condition A)
+      accuracy lands around 50–70% — too easy or too hard leaves no room to detect a difference. Randomise ON/OFF is
+      handled for you (conditions are shuffled and never shown during the run). For anything beyond informal
+      friends-and-family testing, obtain ethics/IRB review and involve a vision-care professional.
+    </div>
+  </section>
+
+  <!-- ===================== RUN ===================== -->
+  <section id="run" class="hidden">
+    <div class="progress"><div id="bar"></div></div>
+    <div class="muted" id="counter" style="margin-top:6px"></div>
+    <div class="card">
+      <div class="stimWrap">
+        <canvas id="stim" width="120" height="120"></canvas>
+        <div class="muted">Which letter did you see? (type it or click)</div>
+        <div class="keys" id="keys"></div>
+        <button id="cantsee" class="ghost" style="margin-top:4px">Can't tell / guess</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== RESULTS ===================== -->
+  <section id="results" class="hidden">
+    <div class="card">
+      <div class="big">Results</div>
+      <div class="muted" id="summaryMeta"></div>
+      <table id="resTable">
+        <thead><tr><th>Condition</th><th>What it is</th><th class="num">Trials</th><th class="num">Correct</th><th class="num">Accuracy</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="verdict" style="margin-top:16px"></div>
+      <div style="margin-top:16px; display:flex; gap:10px;">
+        <button id="dlCsv" class="ghost">Download CSV</button>
+        <button id="dlJson" class="ghost">Download JSON</button>
+        <button id="again">New run</button>
+      </div>
+      <div class="disclaimer">
+        The scientifically meaningful comparison is <b>C vs B</b>: both are contrast-reduced, so if C beats B the
+        pre-distortion itself is helping. C beating only A could just reflect the contrast change. A single session is
+        not evidence — repeat across eyes, sessions, and subjects, and analyse with proper statistics.
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const SLOAN = ["C","D","H","K","N","O","R","S","V","Z"];
+const CONDITIONS = {
+  A: { label:"Original (no change)",              precompensate:false, useDR:false },
+  B: { label:"Contrast-reduced only (control)",   precompensate:false, useDR:true  },
+  C: { label:"Full VisionCorrect correction",     precompensate:true,  useDR:true  },
+};
+
+function cfg() {
+  return {
+    subject: $("subject").value.trim() || "S01",
+    eye: $("eye").value,
+    sphere: parseFloat($("sphere").value),
+    cylinder: parseFloat($("cyl").value),
+    axis: parseFloat($("axis").value),
+    distanceCm: parseFloat($("dist").value),
+    ppi: parseFloat($("ppi").value),
+    box: Math.max(24, parseInt($("box").value) || 120),
+    trialsPer: Math.max(1, parseInt($("trials").value) || 15),
+    cs: parseFloat($("cs").value),
+    dr: parseFloat($("dr").value),
+    reg: parseFloat($("reg").value),
+  };
+}
+
+// Render a single Sloan letter to a PNG blob at the exact display size.
+function letterBlob(letter, box) {
+  const c = document.createElement("canvas"); c.width = box; c.height = box;
+  const x = c.getContext("2d");
+  x.fillStyle = "#fff"; x.fillRect(0,0,box,box);
+  x.fillStyle = "#000"; x.textAlign = "center"; x.textBaseline = "middle";
+  x.font = `bold ${Math.round(box*0.72)}px Arial`;
+  x.fillText(letter, box/2, box/2 + box*0.02);
+  return new Promise(res => c.toBlob(res, "image/png"));
+}
+
+// Process a letter through the backend for a given condition.
+async function processLetter(letter, cond, k) {
+  const blob = await letterBlob(letter, k.box);
+  const fd = new FormData();
+  fd.append("image", blob, "L.png");
+  fd.append("sphere", k.sphere); fd.append("cylinder", k.cylinder); fd.append("axis", k.axis);
+  fd.append("viewing_distance_mm", String(k.distanceCm*10));
+  fd.append("ppi", String(k.ppi));
+  fd.append("correction_strength", String(k.cs));
+  fd.append("regularization", String(k.reg));
+  fd.append("dynamic_range", String(cond.useDR ? k.dr : 1.0));
+  fd.append("precompensate", cond.precompensate ? "true" : "false");
+  const r = await fetch("/v1/correct?response=png", { method:"POST", body:fd });
+  if (!r.ok) throw new Error("API " + r.status);
+  return await r.blob();
+}
+
+// ---- calibration preview ----
+$("calib").addEventListener("click", async () => {
+  const k = cfg();
+  try {
+    const b = await processLetter(SLOAN[Math.floor(Math.random()*10)], CONDITIONS.C, k);
+    const url = URL.createObjectURL(b);
+    const img = new Image();
+    img.onload = () => { const cv=$("stim"); cv.width=img.width; cv.height=img.height;
+      cv.getContext("2d").drawImage(img,0,0); $("run").classList.remove("hidden");
+      $("counter").textContent="Preview (condition C). Adjust 'Letter box' until it's near your threshold, then Start.";
+      $("bar").style.width="0%"; $("keys").innerHTML=""; $("cantsee").classList.add("hidden");
+      window.scrollTo(0,document.body.scrollHeight); URL.revokeObjectURL(url); };
+    img.src = url;
+    $("calibHint").textContent = "Tip: at "+k.distanceCm+" cm, larger box = easier.";
+  } catch(e){ $("calibHint").textContent = "Error: "+e.message; }
+});
+
+// ---- test run ----
+let state = null;
+
+function buildSequence(k) {
+  const seq = [];
+  for (const key of Object.keys(CONDITIONS))
+    for (let i=0;i<k.trialsPer;i++)
+      seq.push({ cond:key, letter: SLOAN[Math.floor(Math.random()*10)] });
+  for (let i=seq.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [seq[i],seq[j]]=[seq[j],seq[i]]; }
+  return seq;
+}
+
+function makeKeys() {
+  const wrap = $("keys"); wrap.innerHTML="";
+  SLOAN.forEach(L => { const b=document.createElement("button"); b.textContent=L;
+    b.onclick=()=>respond(L); wrap.appendChild(b); });
+}
+
+async function showTrial() {
+  const k = state.cfg, t = state.seq[state.i];
+  $("cantsee").classList.remove("hidden");
+  $("counter").textContent = `Trial ${state.i+1} of ${state.seq.length}`;
+  $("bar").style.width = (state.i/state.seq.length*100)+"%";
+  const blob = await processLetter(t.letter, CONDITIONS[t.cond], k);
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => { const cv=$("stim"); cv.width=img.width; cv.height=img.height;
+    cv.getContext("2d").drawImage(img,0,0); URL.revokeObjectURL(url);
+    state.shownAt = performance.now(); };
+  img.src = url;
+}
+
+function respond(letter) {
+  if (state.shownAt == null) return;
+  const t = state.seq[state.i];
+  const rt = Math.round(performance.now() - state.shownAt);
+  state.results.push({ trial: state.i+1, condition: t.cond, target: t.letter,
+    response: letter, correct: letter === t.letter ? 1 : 0, rt_ms: rt });
+  state.shownAt = null; state.i++;
+  if (state.i >= state.seq.length) finish(); else showTrial();
+}
+
+document.addEventListener("keydown", e => {
+  if ($("run").classList.contains("hidden")) return;
+  const L = e.key.toUpperCase();
+  if (SLOAN.includes(L)) respond(L);
+});
+$("cantsee").addEventListener("click", () => respond("?"));
+
+$("start").addEventListener("click", () => {
+  const k = cfg();
+  if ([k.sphere,k.cylinder,k.axis,k.distanceCm,k.ppi].some(isNaN)) { alert("Fill in all numeric fields."); return; }
+  state = { cfg:k, seq:buildSequence(k), i:0, results:[], shownAt:null, startedAt:new Date().toISOString() };
+  makeKeys();
+  $("setup").classList.add("hidden"); $("results").classList.add("hidden"); $("run").classList.remove("hidden");
+  showTrial();
+});
+
+function finish() {
+  $("run").classList.add("hidden"); $("results").classList.remove("hidden");
+  const k = state.cfg, rows = state.results;
+  const tbody = $("resTable").querySelector("tbody"); tbody.innerHTML="";
+  const acc = {};
+  for (const key of Object.keys(CONDITIONS)) {
+    const sub = rows.filter(r=>r.condition===key);
+    const correct = sub.reduce((s,r)=>s+r.correct,0);
+    acc[key] = { n:sub.length, correct, pct: sub.length? correct/sub.length*100 : 0 };
+    const tr=document.createElement("tr");
+    tr.innerHTML = `<td><span class="pill" style="background:#232838">${key}</span></td>
+      <td>${CONDITIONS[key].label}</td><td class="num">${acc[key].n}</td>
+      <td class="num">${correct}</td><td class="num">${acc[key].pct.toFixed(0)}%</td>`;
+    tbody.appendChild(tr);
+  }
+  $("summaryMeta").textContent =
+    `${k.subject} · ${k.eye} eye · ${k.sphere}/${k.cylinder}×${k.axis}° · ${k.distanceCm} cm · ${k.ppi} PPI · box ${k.box}px`;
+  const dCB = acc.C.pct - acc.B.pct, dCA = acc.C.pct - acc.A.pct;
+  const col = dCB > 0 ? "var(--good)" : (dCB < 0 ? "var(--bad)" : "var(--muted)");
+  $("verdict").innerHTML =
+    `<div class="big" style="color:${col}">C − B = ${dCB>=0?"+":""}${dCB.toFixed(0)} pts</div>
+     <div class="muted">Correction vs contrast-matched control (the meaningful test). ` +
+    `C − A = ${dCA>=0?"+":""}${dCA.toFixed(0)} pts vs original. ` +
+    `Positive C−B suggests the pre-distortion helped this eye at this size.</div>`;
+}
+
+// ---- export ----
+function download(name, text, type) {
+  const b = new Blob([text], {type}); const u = URL.createObjectURL(b);
+  const a = document.createElement("a"); a.href=u; a.download=name; a.click(); URL.revokeObjectURL(u);
+}
+$("dlCsv").addEventListener("click", () => {
+  const k = state.cfg;
+  const head = ["subject","eye","sphere","cylinder","axis","distance_cm","ppi","letter_box_px",
+    "correction_strength","dynamic_range","regularization","trial","condition","target","response","correct","rt_ms"];
+  const lines = [head.join(",")];
+  for (const r of state.results)
+    lines.push([k.subject,k.eye,k.sphere,k.cylinder,k.axis,k.distanceCm,k.ppi,k.box,k.cs,k.dr,k.reg,
+      r.trial,r.condition,r.target,r.response,r.correct,r.rt_ms].join(","));
+  download(`visioncorrect_${k.subject}_${k.eye}.csv`, lines.join("\n"), "text/csv");
+});
+$("dlJson").addEventListener("click", () => {
+  download(`visioncorrect_${state.cfg.subject}_${state.cfg.eye}.json`,
+    JSON.stringify({ algorithmVersion:"0.1.0", startedAt:state.startedAt, config:state.cfg, trials:state.results }, null, 2),
+    "application/json");
+});
+$("again").addEventListener("click", () => {
+  $("results").classList.add("hidden"); $("setup").classList.remove("hidden"); window.scrollTo(0,0);
+});
+</script>
+</body>
+</html>

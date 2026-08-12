@@ -55,6 +55,13 @@ uvicorn app.main:app --reload --port 8000
 The demo page lets you pick a test image (or upload your own), dial in a
 prescription, and watch the four panels update live.
 
+## Test it on a real human
+
+Open **`http://localhost:8000/test`** for a blinded, 3-condition letter-ID study
+(original vs contrast-only control vs full correction) that exports CSV/JSON. The
+meaningful result is *correction beats the contrast-matched control*. Full
+protocol and caveats: [`docs/testing.md`](docs/testing.md).
+
 ---
 
 ## Repository layout
@@ -87,7 +94,8 @@ later become a GPU shader, native mobile library, or OEM display stage.
 
 ## API
 
-`POST /v1/correct` (multipart) returns the pre-compensated PNG.
+`POST /v1/correct` (multipart) returns the pre-compensated PNG. Pass
+`precompensate=false` for the contrast-only control condition.
 `POST /v1/demo` returns all four base64 panels for before/after comparison.
 `GET  /health` returns service status.
 Full contract: [`docs/api.md`](docs/api.md).

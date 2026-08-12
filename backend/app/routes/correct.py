@@ -35,6 +35,7 @@ async def correct(
     regularization: float = Form(0.012),
     dynamic_range: float = Form(0.55),
     contrast_boost: float = Form(1.0),
+    precompensate: bool = Form(True),
     response: str = Query("png", pattern="^(png|json)$"),
 ):
     """Return the pre-compensated image to display.
@@ -55,7 +56,8 @@ async def correct(
         )
         t0 = time.perf_counter()
         result = imaging.renderer().render(
-            arr, prescription, display, viewing_distance_mm, cal)
+            arr, prescription, display, viewing_distance_mm, cal,
+            precompensate=precompensate)
         ms = int((time.perf_counter() - t0) * 1000)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
