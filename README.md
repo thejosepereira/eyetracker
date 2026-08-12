@@ -43,6 +43,16 @@ panel 2 become legible. The cost is contrast: panel 4 is greyer, because a norma
 display can't show the negative/over-bright values full inversion needs, so we
 trade contrast for sharpness (see *dynamic range* below).
 
+## Both eyes
+
+You can enter a separate prescription for each eye (OD/OS) and choose a mode:
+**Right**, **Left**, or **Both (averaged)**. Because a normal screen shows one
+image to both eyes, it cannot perfectly pre-distort for two different eyes at
+once — *Right*/*Left* (view with one eye) give true clarity, *Both* is a
+power-vector-averaged compromise, and perfect per-eye correction needs a per-eye
+display (VR/AR). The averaging uses proper dioptric power vectors, not naive
+number-averaging. See [`docs/optical-model.md`](docs/optical-model.md#binocular-use).
+
 ## No-install option: one self-contained HTML file
 
 Don't want to run a server? Open **[`standalone/visioncorrect.html`](standalone/visioncorrect.html)**

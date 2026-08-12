@@ -71,6 +71,33 @@ This is a **large** blur, near the limit of what a conventional display can
 recover — which is exactly why contrast reduction (see `architecture.md`) is
 necessary and why the perceived result is sharper but lower-contrast.
 
+## Binocular use
+
+A conventional 2-D screen shows a **single image to both eyes**, but the two eyes
+usually need different corrections. You cannot pre-distort one shared image to be
+simultaneously correct for two different prescriptions. So the engine resolves a
+two-eye profile into one prescription per a mode:
+
+- **Right / Left** — correct for that eye; view with the other eye covered. The
+  only way to get a *truly* sharp image on a normal screen.
+- **Both (averaged)** — a compromise for both-eyes-open viewing. The average is
+  computed in **dioptric power-vector space** (M, J0, J45), not by naively
+  averaging sphere/cylinder/axis (which is wrong for oblique axes):
+
+  ```
+  M   = S + C/2
+  J0  = -(C/2)·cos(2·axis)
+  J45 = -(C/2)·sin(2·axis)
+  ```
+
+  Average each across the eyes, then convert back:
+  `C = -2·√(J0²+J45²)`, `S = M - C/2`, `axis = ½·atan2(J45, J0)`.
+  Implemented as `averagePrescriptions()` / `resolveRx()` in the engine.
+
+- **Perfect per-eye** — requires each eye to see its own image: a VR/AR headset
+  (one display per eye) or a light-field / autostereoscopic display. This is why
+  AR/VR is a natural target for the technology.
+
 ## What "stronger inputs" would look like
 
 The architecture is meant to accept progressively better characterisations:

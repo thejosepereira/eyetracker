@@ -59,16 +59,30 @@
     </div>
 
     <div class="card" style="margin-top:14px">
+      <label>Which eye?</label>
+      <select id="mode">
+        <option value="right">Right eye (cover left)</option>
+        <option value="left">Left eye (cover right)</option>
+        <option value="both">Both — averaged compromise</option>
+      </select>
+      <label style="margin-top:12px; color:var(--fg)">RIGHT eye (OD)</label>
       <div class="row">
-        <div><label>Sphere (D)</label><input id="sphere" type="number" step="0.25" value="-2.5" /></div>
-        <div><label>Cylinder (D)</label><input id="cyl" type="number" step="0.25" value="-1.0" /></div>
-        <div><label>Axis (°)</label><input id="axis" type="number" step="5" value="110" /></div>
+        <div><label>Sph</label><input id="rs" type="number" step="0.25" value="-2.5" /></div>
+        <div><label>Cyl</label><input id="rc" type="number" step="0.25" value="-1.0" /></div>
+        <div><label>Axis</label><input id="ra" type="number" step="5" value="110" /></div>
       </div>
+      <label style="margin-top:8px; color:var(--fg)">LEFT eye (OS)</label>
       <div class="row">
+        <div><label>Sph</label><input id="ls" type="number" step="0.25" value="-2.25" /></div>
+        <div><label>Cyl</label><input id="lc" type="number" step="0.25" value="-0.75" /></div>
+        <div><label>Axis</label><input id="la" type="number" step="5" value="70" /></div>
+      </div>
+      <div class="row" style="margin-top:8px">
         <div><label>Screen PPI</label><input id="ppi" type="number" value="140" /></div>
         <div><label>Strength</label><input id="cs" type="number" step="0.05" value="1.0" /></div>
         <div><label>Headroom</label><input id="dr" type="number" step="0.05" value="0.55" /></div>
       </div>
+      <div class="meta" id="modeNote"></div>
       <div class="toggleRow"><span>Correction</span>
         <label><input type="checkbox" id="corrOn" checked /> ON</label></div>
     </div>
@@ -117,7 +131,13 @@ function contentCard() {
 const CARD = contentCard();
 const CARD_RGBA = CARD.getContext("2d").getImageData(0,0,CARD.width,CARD.height);
 
-function rx(){ return { sphere:+$("sphere").value, cylinder:+$("cyl").value, axis:+$("axis").value }; }
+function rx(){ const R={sphere:+$("rs").value,cylinder:+$("rc").value,axis:+$("ra").value},
+  L={sphere:+$("ls").value,cylinder:+$("lc").value,axis:+$("la").value};
+  const mode=$("mode").value;
+  $("modeNote").textContent = mode==="both"
+    ? "Averaged compromise — a single screen can't fully correct two eyes at once; use one eye at a time (or VR/AR) for perfect clarity."
+    : `Correcting for the ${mode} eye — cover the other eye.`;
+  return VC.resolveRx(mode, R, L); }
 
 function renderAt(distCm){
   const W=CARD.width, H=CARD.height;
@@ -143,7 +163,7 @@ function requestRender(distCm){
 // ---------- manual slider (works with no camera) ----------
 $("manual").addEventListener("input", e=>{ $("manVal").textContent=e.target.value;
   if(source!=="camera"){ $("srcBadge").textContent="manual"; requestRender(+e.target.value); } });
-["sphere","cyl","axis","ppi","cs","dr"].forEach(id=>$(id).addEventListener("input",()=>{ renderedDist=null; requestRender(lastDist); }));
+["mode","rs","rc","ra","ls","lc","la","ppi","cs","dr"].forEach(id=>$(id).addEventListener("input",()=>{ renderedDist=null; requestRender(lastDist); }));
 $("corrOn").addEventListener("change",()=>renderAt(lastDist));
 
 // ---------- camera + face mesh ----------

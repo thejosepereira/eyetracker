@@ -160,6 +160,35 @@
     };
   }
 
+  // ---- combine sphero-cylindrical prescriptions via dioptric power vectors ----
+  // A screen shows one image to both eyes, so binocular use needs a single Rx.
+  // Naive averaging of axis is wrong; the correct method converts each Rx to the
+  // (M, J0, J45) power-vector space, averages there, and converts back.
+  function averagePrescriptions(list) {
+    let M = 0, J0 = 0, J45 = 0;
+    for (const p of list) {
+      const c = p.cylinder || 0, a = (p.axis || 0) * Math.PI / 180;
+      M += p.sphere + c / 2;
+      J0 += -(c / 2) * Math.cos(2 * a);
+      J45 += -(c / 2) * Math.sin(2 * a);
+    }
+    const n = list.length || 1; M /= n; J0 /= n; J45 /= n;
+    const Jmag = Math.sqrt(J0 * J0 + J45 * J45);
+    const cylinder = -2 * Jmag;                 // minus-cyl convention
+    const sphere = M - cylinder / 2;
+    let axis = 0.5 * Math.atan2(J45, J0) * 180 / Math.PI;
+    axis = ((axis % 180) + 180) % 180;
+    return { sphere, cylinder, axis };
+  }
+
+  // Resolve an eye-mode ("right" | "left" | "both") + a two-eye profile into the
+  // single prescription to render with.
+  function resolveRx(mode, rightEye, leftEye) {
+    if (mode === "left") return leftEye;
+    if (mode === "both") return averagePrescriptions([rightEye, leftEye]);
+    return rightEye;
+  }
+
   // ---- full render pipeline on an ImageData-like {data,width,height} ----
   // Returns a new Uint8ClampedArray (RGBA). precompensate=false => contrast-only control.
   function render(rgba, W, H, prescription, opts) {
@@ -228,6 +257,7 @@
     fft1d, fft2, generatePsf, kernelSizeForSigma, nextPow2, psfToPadded,
     wienerPrecompensate, applyPsf, srgbToLinear, linearToSrgb,
     prescriptionToBlur, render, simulateEyeView,
+    averagePrescriptions, resolveRx,
   };
   root.VC = VC;
   if (typeof module !== "undefined" && module.exports) module.exports = VC;
