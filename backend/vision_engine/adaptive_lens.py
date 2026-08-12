@@ -38,14 +38,39 @@ class LensSpec:
     settle_ms: float         # time to reach a new power
     can_cylinder: bool       # can it apply astigmatic (cylindrical) correction?
     max_cylinder_d: float = 0.0
+    # Descriptors so the "no liquid" options are selectable/queryable:
+    medium: str = "liquid"           # "solid" | "liquid" | "liquid-crystal"
+    moving_parts: bool = False       # needs mechanical motion (actuator, slide)
+    maturity: str = "research"       # "product" | "emerging" | "research"
+
+    @property
+    def liquid_free(self) -> bool:
+        return self.medium == "solid"
 
 
 # Illustrative device envelopes (not vendor specs).
 LENS_SPECS = {
-    "lc":      LensSpec("liquid-crystal", -3.0, 3.0, 0.05, 30.0, True, 2.0),
-    "fluidic": LensSpec("fluidic/electrowetting", -8.0, 8.0, 0.10, 15.0, False),
-    "alvarez": LensSpec("alvarez (motorised)", -6.0, 4.0, 0.01, 120.0, False),
+    # --- liquid family ---
+    "lc":      LensSpec("liquid-crystal", -3.0, 3.0, 0.05, 30.0, True, 2.0,
+                        medium="liquid-crystal", maturity="emerging"),
+    "fluidic": LensSpec("fluidic/electrowetting", -8.0, 8.0, 0.10, 15.0, False,
+                        medium="liquid", maturity="product"),
+    # --- solid / "no liquid" family ---
+    "alvarez": LensSpec("alvarez (solid plates, motorised)", -6.0, 4.0, 0.01, 120.0, False,
+                        medium="solid", moving_parts=True, maturity="product"),
+    "deformable": LensSpec("deformable solid polymer", -4.0, 4.0, 0.05, 60.0, False,
+                        medium="solid", moving_parts=True, maturity="emerging"),
+    # Flat "hologram-like" nanostructured optic; can encode arbitrary wavefronts
+    # (including cylinder), but eyeglass-sized full-colour versions are lab-stage.
+    "metasurface": LensSpec("metasurface / holographic (flat)", -3.0, 3.0, 0.10, 5.0, True, 3.0,
+                        medium="solid", moving_parts=False, maturity="research"),
+    # Solid electro-optic ceramic driven by voltage ("send it a signal").
+    "electro_optic": LensSpec("electro-optic ceramic (PLZT)", -2.0, 2.0, 0.05, 1.0, False,
+                        medium="solid", moving_parts=False, maturity="research"),
 }
+
+# Convenience: the backends that use no liquid at all.
+SOLID_STATE_LENSES = [k for k, s in LENS_SPECS.items() if s.liquid_free]
 
 
 @dataclass

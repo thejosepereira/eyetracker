@@ -38,15 +38,36 @@ just to update numbers.
 
 ## Tunable-lens technologies (illustrative envelopes in `LENS_SPECS`)
 
-| Backend | Principle | Range* | Cylinder | Notes |
-|---------|-----------|--------|----------|-------|
-| `lc` | liquid-crystal refractive index vs. voltage | ±3 D | yes | fast, low power; limited range |
-| `fluidic` | membrane/electrowetting shape change | ±8 D | no (sphere) | wide range; bulk/optics tradeoffs |
-| `alvarez` | two sliding freeform plates | −6…+4 D | no | continuous; needs an actuator, slower |
+The control software only emits a **target power** — it is lens-agnostic, so any
+backend below plugs in behind `TunableLens`. That includes several **no-liquid**
+options (`medium == "solid"`, listed in `SOLID_STATE_LENSES`).
+
+| Backend | Principle | Liquid? | Range* | Cylinder | Maturity | Notes |
+|---------|-----------|---------|--------|----------|----------|-------|
+| `fluidic` | membrane/electrowetting shape change | liquid | ±8 D | no | product | wide range; bulk |
+| `lc` | liquid-crystal index vs. voltage | liquid-crystal | ±3 D | yes | emerging | fast, low power; limited range |
+| `alvarez` | two sliding **solid** freeform plates | **solid** | −6…+4 D | no | product | mature no-liquid path; needs a small slide actuator |
+| `deformable` | bend a **solid** polymer element | **solid** | ±4 D | no | emerging | middle ground; mechanical |
+| `metasurface` | flat nanostructured "hologram" optic | **solid** | ±3 D | yes | research | ultra-thin & flat; can encode astigmatism; full-colour eyeglass-size is unsolved |
+| `electro_optic` | **solid** ceramic (PLZT) index vs. voltage | **solid** | ±2 D | no | research | truly solid-state, voltage-driven; high V, small aperture today |
 
 \* Approximate and illustrative — **not** vendor specifications. Real prior art:
-Deep Optics / 32°N (LC), Optotune & Varioptic (fluidic), Adlens/Eyejusters
-(Alvarez, manual today), and Stanford's *autofocals* research prototype.
+Optotune & Varioptic (fluidic), Deep Optics / 32°N (LC), Adlens/Eyejusters
+(Alvarez, manual today), metalens research (Capasso group and others), and
+Stanford's *autofocals* research prototype.
+
+### "No liquid" options, ranked by how real they are today
+
+1. **Alvarez (solid plates)** — the practical no-liquid choice now: solid, cheap,
+   wide range, good optics. Trade-off: a tiny motor slides the plates.
+2. **Deformable solid** — bendable polymer; simpler motion, narrower range.
+3. **Metasurface / holographic (flat)** — the "like a hologram" answer: a flat
+   patterned-glass lens. Thin and elegant, and uniquely able to encode arbitrary
+   wavefronts (astigmatism included) — but eyeglass-sized, full-colour, tunable
+   versions are still lab-stage (efficiency and chromatic aberration are the hard
+   parts).
+4. **Electro-optic ceramic** — solid and purely electrically driven, but limited
+   aperture/voltage today.
 
 **Device range matters.** The simulation below reaches −3.26 D, which an LC lens
 (±3 D) cannot deliver — it would saturate and blur. Pick a lens whose range covers

@@ -2,9 +2,34 @@ import math
 import pytest
 
 from vision_engine import (
-    TunableLens, LENS_SPECS, SelfRefraction, AdaptiveController,
+    TunableLens, LENS_SPECS, SOLID_STATE_LENSES, SelfRefraction, AdaptiveController,
     near_add_d, max_accommodation_d,
 )
+
+
+# ---- non-liquid (solid-state) lens options ----
+
+def test_solid_state_lenses_available():
+    # Alvarez / deformable / metasurface / electro-optic are all liquid-free.
+    assert set(SOLID_STATE_LENSES) >= {"alvarez", "deformable", "metasurface", "electro_optic"}
+    for k in SOLID_STATE_LENSES:
+        assert LENS_SPECS[k].medium == "solid"
+        assert LENS_SPECS[k].liquid_free
+
+
+def test_metasurface_is_flat_and_can_do_cylinder():
+    meta = LENS_SPECS["metasurface"]
+    assert meta.liquid_free and not meta.moving_parts   # flat, no liquid, no motion
+    assert meta.can_cylinder                            # can encode astigmatism
+    cmd = TunableLens("metasurface").command(-2.0, cylinder_d=-1.5, axis_deg=90)
+    assert cmd.cylinder_d < 0 and not cmd.unsupported_cyl
+
+
+def test_control_is_lens_agnostic():
+    # The same target power resolves through any backend (liquid or solid).
+    for backend in ("fluidic", "alvarez", "metasurface", "electro_optic"):
+        cmd = TunableLens(backend).command(-1.5)
+        assert abs(cmd.sphere_d - (-1.5)) <= LENS_SPECS[backend].resolution_d + 1e-9
 
 
 # ---- tunable lens ----
