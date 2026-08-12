@@ -1,0 +1,47 @@
+name: Deploy VisionCorrect tools to GitHub Pages
+
+# Publishes the self-contained HTML tools in standalone/ as a static site.
+# One-time setup required in the repo: Settings -> Pages -> Build and deployment
+# -> Source: "GitHub Actions". If a deploy is blocked by environment protection,
+# add this branch under Settings -> Environments -> github-pages.
+
+on:
+  push:
+    branches: ["claude/vision-correction-distortion-vjrd5i"]
+    paths:
+      - "standalone/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble site from standalone/
+        run: |
+          mkdir -p _site
+          cp standalone/index.html _site/
+          cp standalone/selftest.html _site/
+          cp standalone/visioncorrect.html _site/
+          cp standalone/distance.html _site/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

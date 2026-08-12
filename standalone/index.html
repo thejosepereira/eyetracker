@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VisionCorrect</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1115; --card:#181b22; --line:#2a2f3a;
+          --fg:#e8eaed; --muted:#9aa0ab; --accent:#5b9dff; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  .wrap { max-width:720px; margin:0 auto; padding:48px 24px; }
+  h1 { font-size:28px; margin:0 0 6px; }
+  .tag { color:var(--muted); font-size:15px; margin-bottom:28px; }
+  a.card { display:block; text-decoration:none; color:inherit; background:var(--card);
+           border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin-bottom:14px;
+           transition:border-color .15s; }
+  a.card:hover { border-color:var(--accent); }
+  .card h2 { margin:0 0 4px; font-size:18px; color:var(--accent); }
+  .card p { margin:0; color:var(--muted); font-size:14px; line-height:1.5; }
+  .disclaimer { color:var(--muted); font-size:12px; margin-top:24px; line-height:1.6;
+                border-top:1px dashed var(--line); padding-top:16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>VisionCorrect</h1>
+  <div class="tag">Personalized computational rendering that pre-distorts a screen so a blurry eye perceives it clearly. Everything below runs in your browser.</div>
+
+  <a class="card" href="selftest.html">
+    <h2>Self-test viewer →</h2>
+    <p>Enter your prescription and see the pre-distorted image live. Flip correction ON/OFF and judge it with your own eyes. Glasses off, one eye, held at the set distance.</p>
+  </a>
+
+  <a class="card" href="visioncorrect.html">
+    <h2>Demo &amp; blinded test →</h2>
+    <p>Four-panel demo (original → what your eye sees → pre-distorted → corrected), plus a blinded 3-condition letter-identification study that scores results and exports CSV/JSON.</p>
+  </a>
+
+  <a class="card" href="distance.html">
+    <h2>Distance-adaptive →</h2>
+    <p>The front camera estimates how far your face is and the correction re-renders as you move. (Needs camera permission — this page's https makes that possible.) Manual slider works too.</p>
+  </a>
+
+  <div class="disclaimer">
+    Experimental R&amp;D prototype — not a medical device and not a replacement for prescribed corrective eyewear.
+    For accurate blur, set your real screen PPI and viewing distance. Source:
+    <a href="https://github.com/thejosepereira/eyetracker" style="color:var(--accent)">github.com/thejosepereira/eyetracker</a>.
+  </div>
+</div>
+</body>
+</html>
