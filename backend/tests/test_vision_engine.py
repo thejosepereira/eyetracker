@@ -73,6 +73,24 @@ def test_stronger_prescription_gives_more_blur():
     assert strong.sigma_x > weak.sigma_x
 
 
+def test_far_point_model_sharp_at_far_point():
+    # A -2.5 D eye is sharpest at its far point (~40 cm): near-zero blur there,
+    # and more blur farther away.
+    model = OpticalModel()
+    d = DisplayParams(264.0)
+    at_far_point = model.prescription_to_blur(EyePrescription(-2.5, 0, 0), 400, d)
+    farther = model.prescription_to_blur(EyePrescription(-2.5, 0, 0), 800, d)
+    assert at_far_point.sigma_x <= model.min_sigma_px + 1e-6   # essentially sharp
+    assert farther.sigma_x > at_far_point.sigma_x              # blurs beyond far point
+
+
+def test_emmetrope_has_no_modelled_blur():
+    # Zero prescription -> no residual defocus at a normal screen distance.
+    model = OpticalModel()
+    b = model.prescription_to_blur(EyePrescription(0, 0, 0), 400, DisplayParams(264.0))
+    assert b.sigma_x <= model.min_sigma_px + 1e-6
+
+
 def test_astigmatism_makes_blur_anisotropic():
     model = OpticalModel()
     d = DisplayParams(264.0)

@@ -62,5 +62,11 @@ async def selftest() -> FileResponse:
     return FileResponse(os.path.join(_STATIC_DIR, "selftest.html"))
 
 
+@app.get("/lab", include_in_schema=False)
+async def lab() -> FileResponse:
+    """Calibration lab: many sliders + 4-panel good/bad-eye simulation with scores."""
+    return FileResponse(os.path.join(_STATIC_DIR, "lab.html"))
+
+
 if os.path.isdir(_STATIC_DIR):
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")

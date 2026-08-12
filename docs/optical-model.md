@@ -22,13 +22,28 @@ the research improves.
 
 ## The approximation we use (v0.1)
 
-### 1. Defocus → angular blur
+### 1. Defocus → angular blur (far-point model)
 
-A defocused eye images a point as a **blur circle** on the retina. Its angular
-diameter is approximately:
+The **residual defocus** actually experienced depends on distance. A relaxed
+myopic eye of power `S` (negative) is in focus at its **far point** (distance
+`-1/S`) and blurs only for objects *beyond* it; accommodation keeps nearer
+objects sharp:
 
 ```
-    β (radians) ≈ pupil_diameter (m) × | power_error (dioptres) |
+    residual_defocus(d) = max(0, -S - 1/d_metres)     [dioptres]
+```
+
+So a −2.5 D eye is **sharp at ~40 cm** (its far point), blurs progressively
+farther away, and the blur stays **bounded** instead of growing without limit
+with distance (an earlier version scaled blur by the full `|S|` at every
+distance, which over-blurred far viewing). An emmetrope (`S=0`) gets ~0 at any
+distance it can accommodate to.
+
+A defocused eye then images a point as a **blur circle** on the retina, of
+angular diameter:
+
+```
+    β (radians) ≈ pupil_diameter (m) × residual_defocus (dioptres)
 ```
 
 ### 2. Astigmatism → elliptical blur

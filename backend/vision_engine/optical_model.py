@@ -88,12 +88,30 @@ class OpticalModel:
         self.sigma_per_diameter = sigma_per_diameter
         self.min_sigma_px = min_sigma_px
 
+    @staticmethod
+    def _residual_defocus(power_diopters: float, viewing_distance_mm: float) -> float:
+        """Residual defocus (dioptres) actually experienced at this distance.
+
+        Far-point model: a relaxed myopic eye of power `S` (negative) is in focus
+        at its far point (distance = -1/S) and blurs only for objects BEYOND it.
+        Accommodation keeps nearer objects sharp, so
+
+            defocus = max(0, -S - 1/distance_m)
+
+        This makes a -2.5 D eye sharp at ~40 cm (its far point), blurred farther
+        away, and bounds the blur instead of growing without limit with distance.
+        An emmetrope (S=0) gets 0 at all distances it can accommodate to.
+        """
+        d_m = max(viewing_distance_mm / 1000.0, 1e-3)
+        return max(0.0, -power_diopters - 1.0 / d_m)
+
     def _meridian_blur_diameter_px(
         self, power_diopters: float, viewing_distance_mm: float, display: DisplayParams
     ) -> float:
         """Geometric blur-circle diameter on screen, in pixels, for one meridian."""
         pupil_m = self.pupil_diameter_mm / 1000.0
-        beta_rad = pupil_m * abs(power_diopters)          # blur angle (radians)
+        defocus = self._residual_defocus(power_diopters, viewing_distance_mm)
+        beta_rad = pupil_m * defocus                       # blur angle (radians)
         blur_diameter_mm = beta_rad * viewing_distance_mm  # small-angle projection
         return blur_diameter_mm / display.pixel_pitch_mm
 

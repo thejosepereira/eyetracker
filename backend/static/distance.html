@@ -262,7 +262,14 @@
     const minSigma = opts.minSigmaPx || 0.35;
     const strength = opts.correctionStrength == null ? 1.0 : opts.correctionStrength;
     const pitch = MM_PER_INCH / ppi;
-    const diaPx = D => (pupil * Math.abs(D)) * viewingDistanceMm / pitch;
+    // Far-point model: a relaxed myopic eye of power S (negative) is sharp at its
+    // far point (= -1/S) and blurs only BEYOND it; accommodation keeps nearer
+    // objects sharp. defocus = max(0, -S - 1/d). So a -2.5 D eye is sharp at
+    // ~40 cm, blurred farther away, and the blur is bounded (not growing forever
+    // with distance). An emmetrope (S=0) gets ~0 at normal distances.
+    const d_m = Math.max(viewingDistanceMm / 1000, 1e-3);
+    const defocus = D => Math.max(0, -D - 1 / d_m);
+    const diaPx = D => (pupil * defocus(D)) * viewingDistanceMm / pitch;
     const d1 = diaPx(p.sphere), d2 = diaPx(p.sphere + p.cylinder);
     return {
       sigmaX: Math.max(d1 * sigmaPerDia * strength, minSigma),
@@ -309,7 +316,8 @@
     const contrastBoost = opts.contrastBoost == null ? 1.0 : opts.contrastBoost;
     const precomp = opts.precompensate !== false;
     const blur = prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
-      opts.ppi || 264, { correctionStrength: opts.correctionStrength });
+      opts.ppi || 264, { correctionStrength: opts.correctionStrength,
+                         pupilMm: opts.pupilMm, sigmaPerDiameter: opts.sigmaPerDiameter });
     const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
     const psf = generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle);
 
@@ -343,7 +351,8 @@
   function simulateEyeView(rgba, W, H, prescription, opts) {
     opts = opts || {};
     const blur = prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
-      opts.ppi || 264, { correctionStrength: opts.correctionStrength });
+      opts.ppi || 264, { correctionStrength: opts.correctionStrength,
+                         pupilMm: opts.pupilMm, sigmaPerDiameter: opts.sigmaPerDiameter });
     const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
     const psf = generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle);
     const PW = nextPow2(W), PH = nextPow2(H);

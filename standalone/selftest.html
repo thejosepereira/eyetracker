@@ -70,6 +70,7 @@
     <select id="view">
       <option value="toggle">Toggle (flip ON/OFF in place)</option>
       <option value="side">Side by side (original | corrected)</option>
+      <option value="eyesim">Simulated eye — PROOF (what a blurry eye sees)</option>
     </select>
 
     <label>Which eye?</label>
@@ -300,7 +301,14 @@
     const minSigma = opts.minSigmaPx || 0.35;
     const strength = opts.correctionStrength == null ? 1.0 : opts.correctionStrength;
     const pitch = MM_PER_INCH / ppi;
-    const diaPx = D => (pupil * Math.abs(D)) * viewingDistanceMm / pitch;
+    // Far-point model: a relaxed myopic eye of power S (negative) is sharp at its
+    // far point (= -1/S) and blurs only BEYOND it; accommodation keeps nearer
+    // objects sharp. defocus = max(0, -S - 1/d). So a -2.5 D eye is sharp at
+    // ~40 cm, blurred farther away, and the blur is bounded (not growing forever
+    // with distance). An emmetrope (S=0) gets ~0 at normal distances.
+    const d_m = Math.max(viewingDistanceMm / 1000, 1e-3);
+    const defocus = D => Math.max(0, -D - 1 / d_m);
+    const diaPx = D => (pupil * defocus(D)) * viewingDistanceMm / pitch;
     const d1 = diaPx(p.sphere), d2 = diaPx(p.sphere + p.cylinder);
     return {
       sigmaX: Math.max(d1 * sigmaPerDia * strength, minSigma),
@@ -347,7 +355,8 @@
     const contrastBoost = opts.contrastBoost == null ? 1.0 : opts.contrastBoost;
     const precomp = opts.precompensate !== false;
     const blur = prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
-      opts.ppi || 264, { correctionStrength: opts.correctionStrength });
+      opts.ppi || 264, { correctionStrength: opts.correctionStrength,
+                         pupilMm: opts.pupilMm, sigmaPerDiameter: opts.sigmaPerDiameter });
     const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
     const psf = generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle);
 
@@ -381,7 +390,8 @@
   function simulateEyeView(rgba, W, H, prescription, opts) {
     opts = opts || {};
     const blur = prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
-      opts.ppi || 264, { correctionStrength: opts.correctionStrength });
+      opts.ppi || 264, { correctionStrength: opts.correctionStrength,
+                         pupilMm: opts.pupilMm, sigmaPerDiameter: opts.sigmaPerDiameter });
     const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
     const psf = generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle);
     const PW = nextPow2(W), PH = nextPow2(H);
@@ -488,13 +498,23 @@ function recompute(){
     const src=(kind==='upload'&&uploaded)?uploaded:build(kind, sigma);
     const W=src.width,H=src.height; const orig=src.getContext('2d').getImageData(0,0,W,H);
     const res=VC.render(orig.data,W,H,rx(),opts());
-    cache={ orig, corr:new ImageData(new Uint8ClampedArray(res.data),W,H), W, H };
+    cache={ orig, corr:new ImageData(new Uint8ClampedArray(res.data),W,H), W, H, eyeOff:null, eyeOn:null };
+    // Eye-simulation proof (only when that view is active — it's extra FFT work).
+    if(viewMode==='eyesim'){
+      const off=VC.simulateEyeView(orig.data,W,H,rx(),opts());
+      const on=VC.simulateEyeView(res.data,W,H,rx(),opts());
+      cache.eyeOff=new ImageData(new Uint8ClampedArray(off),W,H);
+      cache.eyeOn=new ImageData(new Uint8ClampedArray(on),W,H);
+    }
     const r=rx();
     $('blurMeta').innerHTML=`applied Rx ${r.sphere.toFixed(2)} / ${r.cylinder.toFixed(2)} × ${Math.round(r.axis)}°<br>`+
       `blur σx=${res.blur.sigmaX.toFixed(1)}px σy=${res.blur.sigmaY.toFixed(1)}px @${res.blur.angle}° · PSF ${res.ksize}×${res.ksize} · clipped ${(res.clippedFraction*100).toFixed(0)}%`;
-    $('hint').textContent = kind==='threshold'
-      ? 'Rows are auto-sized to your blur. Flip ON/OFF (spacebar) and watch the ◄ threshold row and the two smaller rows below it — that is where correction should help most.'
-      : 'Flip ON/OFF and compare. Look for the smaller letters becoming readable. The corrected image is greyer — that contrast trade is expected.';
+    $('hint').textContent =
+      viewMode==='eyesim'
+        ? 'PROOF view: both panels are simulated — this is what an eye with your prescription would perceive. If the RIGHT panel is sharper than the LEFT, the pre-distortion math is working (no need to take your own glasses off).'
+      : kind==='threshold'
+        ? 'Rows are auto-sized to your blur. Flip ON/OFF (spacebar) and watch the ◄ threshold row and the two smaller rows below it — that is where correction should help most.'
+        : 'Flip ON/OFF and compare. Look for the smaller letters becoming readable. The corrected image is greyer — that contrast trade is expected.';
     $('spin').style.display='none';
     redraw();
   }, 220);
@@ -505,7 +525,12 @@ function drawTo(canvasId, imgData){ const cv=$(canvasId); cv.width=imgData.width
 
 function redraw(){
   if(!cache.corr) return;
-  if(viewMode==='side'){
+  if(viewMode==='eyesim'){
+    $('figB').style.display=''; $('toggle').style.display='none';
+    if(cache.eyeOff){ drawTo('dispA',cache.eyeOff); drawTo('dispB',cache.eyeOn); }
+    $('capA').textContent='Your eye, correction OFF (blurry)';
+    $('capB').textContent='Your eye, correction ON (should be sharper)';
+  } else if(viewMode==='side'){
     $('figB').style.display=''; $('toggle').style.display='none';
     drawTo('dispA',cache.orig); $('capA').textContent='OFF — original';
     drawTo('dispB',cache.corr); $('capB').textContent='ON — corrected (look here with glasses off)';
@@ -541,7 +566,8 @@ $('resetBtn').addEventListener('click',()=>{ $('cs').value='1.0'; $('dr').value=
 
 // ---- interactions ----
 $('toggle').addEventListener('click',()=>{ showOn=!showOn; redraw(); });
-$('view').addEventListener('change',()=>{ viewMode=$('view').value; redraw(); });
+$('view').addEventListener('change',()=>{ viewMode=$('view').value;
+  if(viewMode==='eyesim' && !cache.eyeOff) recompute(); else redraw(); });
 ['mode','rs','rc','ra','ls','lc','la','dist','ppi','cs','dr','reg'].forEach(id=>$(id).addEventListener('input',recompute));
 document.addEventListener('keydown',e=>{ if(e.code==='Space'){ e.preventDefault(); if(viewMode==='toggle'){ showOn=!showOn; redraw(); } }
   else if(e.key==='f'||e.key==='F'){ toggleFs(); } });
