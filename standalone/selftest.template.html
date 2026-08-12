@@ -34,6 +34,10 @@
   .banner { background:#2a2f3a; border-radius:8px; padding:10px 12px; font-size:12px; line-height:1.5; margin-bottom:6px; }
   .meta { color:var(--muted); font-size:11px; text-align:center; }
   .kbd { background:#232838; border:1px solid var(--line); border-radius:4px; padding:1px 6px; font-size:11px; }
+  .calOverlay { position:fixed; inset:0; background:rgba(0,0,0,.75); display:flex; align-items:center; justify-content:center; z-index:50; padding:20px; }
+  .calSheet { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px; max-width:520px; width:100%; }
+  .calSheet h3 { color:var(--fg); }
+  .calBox { background:linear-gradient(135deg,#2a63b8,#5b9dff); border:2px solid #fff; border-radius:10px; margin:0 auto; box-shadow:0 6px 20px rgba(0,0,0,.4); }
 </style>
 </head>
 <body>
@@ -87,10 +91,16 @@
       <div><label>Axis</label><input id="la" type="number" step="5" value="70" /></div>
     </div>
 
-    <label>Distance <span class="val" id="distV">35</span> cm</label>
-    <input id="dist" type="range" min="20" max="80" value="35" />
-    <label>Screen PPI <span class="val" id="ppiV">140</span></label>
-    <input id="ppi" type="range" min="80" max="460" value="140" />
+    <label>Fixed eye distance <span class="val" id="distV">35</span> cm</label>
+    <input id="dist" type="range" min="15" max="80" value="35" />
+    <div class="meta" style="margin-top:6px">
+      Keep the eye you're testing exactly this far from the screen and hold it steady.
+      <b>Easy rig:</b> cut a piece of string <b><span id="strCm">35</span> cm</b> long, tape one end at the
+      middle of the screen, hold the other end to your cheek just below the eye — string taut = correct distance.
+    </div>
+    <label style="margin-top:14px">Screen PPI <span class="val" id="ppiV">140</span></label>
+    <input id="ppi" type="range" min="80" max="640" value="140" />
+    <button class="ghost" id="calBtn" style="width:100%; margin-top:8px">📏 Calibrate with a credit card</button>
     <label>Correction strength <span class="val" id="csV">1.00</span></label>
     <input id="cs" type="range" min="0" max="1.5" step="0.05" value="1.0" />
     <label>Contrast headroom <span class="val" id="drV">0.55</span></label>
@@ -110,6 +120,21 @@
     <div class="hint" id="hint">Flip ON/OFF and compare. Look for the smaller letters becoming readable. The corrected image is greyer — that contrast trade is expected.</div>
   </div>
 </main>
+
+<!-- credit-card PPI calibration overlay -->
+<div id="calOverlay" class="calOverlay" style="display:none">
+  <div class="calSheet">
+    <h3 style="margin:0 0 8px">Calibrate your screen</h3>
+    <p class="meta" style="margin:0 0 14px">Hold a real credit / ID / bank card flat against the screen and drag the slider until the outline matches the card's width <b>exactly</b>. (All such cards are the same size: 85.6 mm wide.)</p>
+    <div id="calBox" class="calBox"></div>
+    <label style="margin-top:16px">Match the card width <span class="val" id="calPpi"></span></label>
+    <input id="calRange" type="range" min="140" max="760" value="300" />
+    <div style="display:flex; gap:10px; margin-top:16px; justify-content:flex-end;">
+      <button class="ghost" id="calCancel" style="width:auto">Cancel</button>
+      <button class="bigToggle on" id="calUse" style="min-width:auto; padding:10px 18px; font-size:15px">Use this PPI</button>
+    </div>
+  </div>
+</div>
 
 <script>/*__ENGINE__*/</script>
 <script>
@@ -193,8 +218,22 @@ function redraw(){
 }
 
 function syncLabels(){ $('distV').textContent=$('dist').value; $('ppiV').textContent=$('ppi').value;
+  $('strCm').textContent=$('dist').value;
   $('csV').textContent=(+$('cs').value).toFixed(2); $('drV').textContent=(+$('dr').value).toFixed(2);
   $('regV').textContent=(+$('reg').value).toFixed(3); }
+
+// ---- credit-card PPI calibration (measures true CSS-pixel PPI) ----
+const CARD_MM = 85.6;   // ISO/IEC 7810 ID-1 card width
+function calUpdate(){ const w=+$('calRange').value; const box=$('calBox');
+  box.style.width=w+'px'; box.style.height=(w*53.98/CARD_MM)+'px';
+  $('calPpi').textContent='≈ '+Math.round(w*25.4/CARD_MM)+' PPI'; }
+$('calBtn').addEventListener('click',()=>{ $('calOverlay').style.display='flex';
+  // seed the slider from the current PPI so it starts near the last value
+  $('calRange').value=Math.round((+$('ppi').value)*CARD_MM/25.4); calUpdate(); });
+$('calRange').addEventListener('input',calUpdate);
+$('calCancel').addEventListener('click',()=>{ $('calOverlay').style.display='none'; });
+$('calUse').addEventListener('click',()=>{ const ppi=Math.round((+$('calRange').value)*25.4/CARD_MM);
+  $('ppi').value=Math.min(640,Math.max(80,ppi)); $('calOverlay').style.display='none'; recompute(); });
 
 // ---- interactions ----
 $('toggle').addEventListener('click',()=>{ showOn=!showOn; redraw(); });
