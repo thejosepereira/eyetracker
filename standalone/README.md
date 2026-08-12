@@ -22,6 +22,14 @@ Two tabs:
   (A original · B contrast-only control · C full correction). Scores % correct,
   logs reaction time, exports CSV + JSON. Meaningful result: **C − B**.
 
+### `selftest.html` — self-test viewer
+
+A big live view of the pre-distorted image for testing on your own eyes. Change
+the prescription per eye, pick content, and flip correction ON/OFF (button or
+<kbd>space</kbd>) — glasses off, one eye covered, at the set distance. Toggling is
+instant (the corrected frame is cached); changing settings recomputes. Side-by-side
+and fullscreen modes included. Works offline (double-click is fine; no camera).
+
 ### `distance.html` — distance-adaptive (front camera)
 
 The front camera estimates how far your face is (from iris spacing) and the

@@ -80,6 +80,16 @@ Open **`http://localhost:8000/test`** for a blinded, 3-condition letter-ID study
 meaningful result is *correction beats the contrast-matched control*. Full
 protocol and caveats: [`docs/testing.md`](docs/testing.md).
 
+## Self-test viewer (look with your own eyes)
+
+Open **`http://localhost:8000/selftest`** (or `standalone/selftest.html`): a big
+live view of the pre-distorted image. Change your prescription per eye, pick
+content (eye chart / text / gratings / your own image), and flip correction
+ON/OFF (button or spacebar) — glasses off, one eye covered, held at the set
+distance. Toggling is instant (the corrected frame is cached); changing settings
+recomputes. There's a side-by-side mode and fullscreen too. Set your real screen
+**PPI** and distance so the blur matches your eye.
+
 ## Distance-adaptive correction (front camera)
 
 Open **`http://localhost:8000/distance`**: the front camera estimates how far your

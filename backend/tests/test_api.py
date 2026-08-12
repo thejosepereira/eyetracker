@@ -86,6 +86,12 @@ def test_distance_page_served():
     assert "distance-adaptive" in r.text
 
 
+def test_selftest_page_served():
+    r = client.get("/selftest")
+    assert r.status_code == 200
+    assert "Self-test" in r.text
+
+
 def test_invalid_image_rejected():
     r = client.post(
         "/v1/correct",

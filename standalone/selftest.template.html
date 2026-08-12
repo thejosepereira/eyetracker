@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VisionCorrect — Self-test</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1115; --card:#181b22; --line:#2a2f3a;
+          --fg:#e8eaed; --muted:#9aa0ab; --accent:#5b9dff; --good:#37d67a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  h1 { margin:0; font-size:17px; } .sub { color:var(--muted); font-size:12px; }
+  main { display:grid; grid-template-columns:300px 1fr; gap:0; min-height:calc(100vh - 52px); }
+  @media (max-width:760px){ main{ grid-template-columns:1fr; } }
+  .panel { padding:16px 18px; border-right:1px solid var(--line); overflow-y:auto; }
+  label { display:block; font-size:12px; color:var(--muted); margin:12px 0 4px; }
+  .val { float:right; color:var(--fg); font-variant-numeric:tabular-nums; }
+  input,select { width:100%; background:#232838; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:7px; font-size:14px; }
+  input[type=range]{ padding:0; }
+  .row { display:flex; gap:8px; } .row>div{ flex:1; }
+  .eyeHead { color:var(--fg); font-size:12px; font-weight:600; margin-top:12px; }
+  .stage { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; gap:14px; position:relative; }
+  .canvasWrap { display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; justify-content:center; }
+  figure { margin:0; text-align:center; }
+  canvas.disp { background:#fff; image-rendering:auto; border-radius:6px; box-shadow:0 4px 24px rgba(0,0,0,.4); }
+  figcaption { color:var(--muted); font-size:12px; margin-top:6px; }
+  .bigToggle { font-size:18px; font-weight:800; padding:16px 28px; border:0; border-radius:12px; cursor:pointer;
+               background:var(--accent); color:#031024; min-width:280px; }
+  .bigToggle.on { background:var(--good); }
+  .hint { color:var(--muted); font-size:13px; text-align:center; max-width:520px; line-height:1.5; }
+  .spinner { position:absolute; top:14px; right:18px; color:var(--muted); font-size:12px; }
+  button.ghost { background:#232838; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:9px 12px; cursor:pointer; font-weight:600; }
+  .banner { background:#2a2f3a; border-radius:8px; padding:10px 12px; font-size:12px; line-height:1.5; margin-bottom:6px; }
+  .meta { color:var(--muted); font-size:11px; text-align:center; }
+  .kbd { background:#232838; border:1px solid var(--line); border-radius:4px; padding:1px 6px; font-size:11px; }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>VisionCorrect — Self-test</h1><div class="sub">Change your prescription and look at the pre-distorted image with your own eyes.</div></div>
+  <div style="margin-left:auto; display:flex; gap:8px;">
+    <button class="ghost" id="fs">⤢ Fullscreen</button>
+  </div>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="banner">
+      <b>How to test:</b> take your glasses/contacts <b>off</b>, cover one eye, and hold the screen at the distance you set below.
+      Then flip <b>correction ON/OFF</b> (button or <span class="kbd">space</span>). With the right settings, ON should look
+      <i>clearer</i> than OFF for that eye. Set your real screen <b>PPI</b> and distance so the blur matches your eye.
+    </div>
+
+    <label>Content</label>
+    <select id="content">
+      <option value="chart">Eye chart (shrinking)</option>
+      <option value="text">Reading text</option>
+      <option value="grating">Line patterns</option>
+      <option value="upload">Upload image…</option>
+    </select>
+    <input type="file" id="file" accept="image/*" class="hidden" style="display:none; margin-top:8px" />
+
+    <label>View</label>
+    <select id="view">
+      <option value="toggle">Toggle (flip ON/OFF in place)</option>
+      <option value="side">Side by side (original | corrected)</option>
+    </select>
+
+    <label>Which eye?</label>
+    <select id="mode">
+      <option value="right">Right eye (cover left)</option>
+      <option value="left">Left eye (cover right)</option>
+      <option value="both">Both — averaged compromise</option>
+    </select>
+
+    <div class="eyeHead">RIGHT eye (OD)</div>
+    <div class="row">
+      <div><label>Sph</label><input id="rs" type="number" step="0.25" value="-2.5" /></div>
+      <div><label>Cyl</label><input id="rc" type="number" step="0.25" value="-1.0" /></div>
+      <div><label>Axis</label><input id="ra" type="number" step="5" value="110" /></div>
+    </div>
+    <div class="eyeHead">LEFT eye (OS)</div>
+    <div class="row">
+      <div><label>Sph</label><input id="ls" type="number" step="0.25" value="-2.25" /></div>
+      <div><label>Cyl</label><input id="lc" type="number" step="0.25" value="-0.75" /></div>
+      <div><label>Axis</label><input id="la" type="number" step="5" value="70" /></div>
+    </div>
+
+    <label>Distance <span class="val" id="distV">35</span> cm</label>
+    <input id="dist" type="range" min="20" max="80" value="35" />
+    <label>Screen PPI <span class="val" id="ppiV">140</span></label>
+    <input id="ppi" type="range" min="80" max="460" value="140" />
+    <label>Correction strength <span class="val" id="csV">1.00</span></label>
+    <input id="cs" type="range" min="0" max="1.5" step="0.05" value="1.0" />
+    <label>Contrast headroom <span class="val" id="drV">0.55</span></label>
+    <input id="dr" type="range" min="0.25" max="1" step="0.05" value="0.55" />
+    <label>Regularization K <span class="val" id="regV">0.012</span></label>
+    <input id="reg" type="range" min="0.002" max="0.05" step="0.002" value="0.012" />
+    <div class="meta" id="blurMeta" style="margin-top:12px; text-align:left"></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="spinner" id="spin" style="display:none">rendering…</div>
+    <div class="canvasWrap" id="wrap">
+      <figure id="figA"><canvas id="dispA" class="disp"></canvas><figcaption id="capA"></figcaption></figure>
+      <figure id="figB" style="display:none"><canvas id="dispB" class="disp"></canvas><figcaption id="capB"></figcaption></figure>
+    </div>
+    <button class="bigToggle on" id="toggle">Correction: ON</button>
+    <div class="hint" id="hint">Flip ON/OFF and compare. Look for the smaller letters becoming readable. The corrected image is greyer — that contrast trade is expected.</div>
+  </div>
+</main>
+
+<script>/*__ENGINE__*/</script>
+<script>
+const $ = id => document.getElementById(id);
+const SIZE = 512; // content is rendered 1:1 at this size (blur is in real screen pixels)
+
+// ---- content builders (512x512, or 512xH for text) ----
+function build(kind){
+  const c=document.createElement('canvas'); c.width=SIZE; c.height=kind==='text'?384:SIZE;
+  const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,c.width,c.height); x.fillStyle='#000';
+  if(kind==='text'){
+    const lines=['The quick brown fox jumps over','the lazy dog. 1234567890.',
+      'Pre-compensation trades a little','contrast for a lot of sharpness.',
+      'Can you read this smaller line?','and this even smaller one?'];
+    let y=54,s=40; x.textAlign='left';
+    lines.forEach(L=>{ x.font=`${s}px Georgia`; x.fillText(L,26,y); y+=s+12; s=Math.max(15,s-4); });
+  } else if(kind==='grating'){
+    x.textAlign='center'; x.font='bold 40px Arial'; x.fillText('spatial frequency',SIZE/2,44);
+    for(let band=0,yy=80; band<5; band++,yy+=84){ const w=1+band; for(let xx=30;xx<SIZE-30;xx+=w*2){ x.fillRect(xx,yy,w,64);}
+      x.font='12px Arial'; x.fillText(`${w}px lines`,SIZE/2,yy+78); }
+  } else {
+    x.textAlign='center'; const rows=[['E',120],['F P',80],['T O Z',56],['L P E D',40],['P E C F D',30]]; let y=30;
+    rows.forEach(([t,s])=>{ x.font=`bold ${s}px Arial`; x.fillText(t,SIZE/2,y+s*0.82); y+=s+18; });
+  }
+  return c;
+}
+
+let uploaded=null;
+$('content').addEventListener('change',()=>{ $('file').style.display=$('content').value==='upload'?'block':'none'; recompute(); });
+$('file').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f)return; const img=new Image();
+  img.onload=()=>{ const c=document.createElement('canvas'); const sc=Math.min(1,SIZE/Math.max(img.width,img.height));
+    c.width=Math.max(1,Math.round(img.width*sc)); c.height=Math.max(1,Math.round(img.height*sc));
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height); uploaded=c; recompute(); };
+  img.src=URL.createObjectURL(f); });
+
+// ---- prescription + options ----
+function rx(){ const R={sphere:+$('rs').value,cylinder:+$('rc').value,axis:+$('ra').value},
+  L={sphere:+$('ls').value,cylinder:+$('lc').value,axis:+$('la').value};
+  return VC.resolveRx($('mode').value,R,L); }
+function opts(){ return { viewingDistanceMm:(+$('dist').value)*10, ppi:+$('ppi').value,
+  correctionStrength:+$('cs').value, dynamicRange:+$('dr').value, regularization:+$('reg').value, precompensate:true }; }
+
+// ---- render + cache (toggle is instant; recompute only on settings change) ----
+let cache={ orig:null, corr:null, W:0, H:0 };
+let showOn=true, viewMode='toggle', timer=null;
+
+function recompute(){
+  syncLabels();
+  if(timer) clearTimeout(timer);
+  $('spin').style.display='block';
+  timer=setTimeout(()=>{
+    const kind=$('content').value;
+    const src=(kind==='upload'&&uploaded)?uploaded:build(kind);
+    const W=src.width,H=src.height; const orig=src.getContext('2d').getImageData(0,0,W,H);
+    const res=VC.render(orig.data,W,H,rx(),opts());
+    cache={ orig, corr:new ImageData(new Uint8ClampedArray(res.data),W,H), W, H };
+    const r=rx();
+    $('blurMeta').innerHTML=`applied Rx ${r.sphere.toFixed(2)} / ${r.cylinder.toFixed(2)} × ${Math.round(r.axis)}°<br>`+
+      `blur σx=${res.blur.sigmaX.toFixed(1)}px σy=${res.blur.sigmaY.toFixed(1)}px @${res.blur.angle}° · PSF ${res.ksize}×${res.ksize} · clipped ${(res.clippedFraction*100).toFixed(0)}%`;
+    $('spin').style.display='none';
+    redraw();
+  }, 220);
+}
+
+function drawTo(canvasId, imgData){ const cv=$(canvasId); cv.width=imgData.width; cv.height=imgData.height;
+  cv.getContext('2d').putImageData(imgData,0,0); }
+
+function redraw(){
+  if(!cache.corr) return;
+  if(viewMode==='side'){
+    $('figB').style.display=''; $('toggle').style.display='none';
+    drawTo('dispA',cache.orig); $('capA').textContent='OFF — original';
+    drawTo('dispB',cache.corr); $('capB').textContent='ON — corrected (look here with glasses off)';
+  } else {
+    $('figB').style.display='none'; $('toggle').style.display='';
+    drawTo('dispA', showOn?cache.corr:cache.orig);
+    $('capA').textContent = showOn?'ON — corrected':'OFF — original';
+    $('toggle').textContent = 'Correction: '+(showOn?'ON':'OFF');
+    $('toggle').classList.toggle('on', showOn);
+  }
+}
+
+function syncLabels(){ $('distV').textContent=$('dist').value; $('ppiV').textContent=$('ppi').value;
+  $('csV').textContent=(+$('cs').value).toFixed(2); $('drV').textContent=(+$('dr').value).toFixed(2);
+  $('regV').textContent=(+$('reg').value).toFixed(3); }
+
+// ---- interactions ----
+$('toggle').addEventListener('click',()=>{ showOn=!showOn; redraw(); });
+$('view').addEventListener('change',()=>{ viewMode=$('view').value; redraw(); });
+['mode','rs','rc','ra','ls','lc','la','dist','ppi','cs','dr','reg'].forEach(id=>$(id).addEventListener('input',recompute));
+document.addEventListener('keydown',e=>{ if(e.code==='Space'){ e.preventDefault(); if(viewMode==='toggle'){ showOn=!showOn; redraw(); } }
+  else if(e.key==='f'||e.key==='F'){ toggleFs(); } });
+function toggleFs(){ if(!document.fullscreenElement) $('stage').requestFullscreen?.(); else document.exitFullscreen?.(); }
+$('fs').addEventListener('click',toggleFs);
+
+syncLabels(); recompute();
+</script>
+</body>
+</html>

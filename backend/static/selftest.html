@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VisionCorrect — Self-test</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1115; --card:#181b22; --line:#2a2f3a;
+          --fg:#e8eaed; --muted:#9aa0ab; --accent:#5b9dff; --good:#37d67a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  h1 { margin:0; font-size:17px; } .sub { color:var(--muted); font-size:12px; }
+  main { display:grid; grid-template-columns:300px 1fr; gap:0; min-height:calc(100vh - 52px); }
+  @media (max-width:760px){ main{ grid-template-columns:1fr; } }
+  .panel { padding:16px 18px; border-right:1px solid var(--line); overflow-y:auto; }
+  label { display:block; font-size:12px; color:var(--muted); margin:12px 0 4px; }
+  .val { float:right; color:var(--fg); font-variant-numeric:tabular-nums; }
+  input,select { width:100%; background:#232838; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:7px; font-size:14px; }
+  input[type=range]{ padding:0; }
+  .row { display:flex; gap:8px; } .row>div{ flex:1; }
+  .eyeHead { color:var(--fg); font-size:12px; font-weight:600; margin-top:12px; }
+  .stage { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; gap:14px; position:relative; }
+  .canvasWrap { display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; justify-content:center; }
+  figure { margin:0; text-align:center; }
+  canvas.disp { background:#fff; image-rendering:auto; border-radius:6px; box-shadow:0 4px 24px rgba(0,0,0,.4); }
+  figcaption { color:var(--muted); font-size:12px; margin-top:6px; }
+  .bigToggle { font-size:18px; font-weight:800; padding:16px 28px; border:0; border-radius:12px; cursor:pointer;
+               background:var(--accent); color:#031024; min-width:280px; }
+  .bigToggle.on { background:var(--good); }
+  .hint { color:var(--muted); font-size:13px; text-align:center; max-width:520px; line-height:1.5; }
+  .spinner { position:absolute; top:14px; right:18px; color:var(--muted); font-size:12px; }
+  button.ghost { background:#232838; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:9px 12px; cursor:pointer; font-weight:600; }
+  .banner { background:#2a2f3a; border-radius:8px; padding:10px 12px; font-size:12px; line-height:1.5; margin-bottom:6px; }
+  .meta { color:var(--muted); font-size:11px; text-align:center; }
+  .kbd { background:#232838; border:1px solid var(--line); border-radius:4px; padding:1px 6px; font-size:11px; }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>VisionCorrect — Self-test</h1><div class="sub">Change your prescription and look at the pre-distorted image with your own eyes.</div></div>
+  <div style="margin-left:auto; display:flex; gap:8px;">
+    <button class="ghost" id="fs">⤢ Fullscreen</button>
+  </div>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="banner">
+      <b>How to test:</b> take your glasses/contacts <b>off</b>, cover one eye, and hold the screen at the distance you set below.
+      Then flip <b>correction ON/OFF</b> (button or <span class="kbd">space</span>). With the right settings, ON should look
+      <i>clearer</i> than OFF for that eye. Set your real screen <b>PPI</b> and distance so the blur matches your eye.
+    </div>
+
+    <label>Content</label>
+    <select id="content">
+      <option value="chart">Eye chart (shrinking)</option>
+      <option value="text">Reading text</option>
+      <option value="grating">Line patterns</option>
+      <option value="upload">Upload image…</option>
+    </select>
+    <input type="file" id="file" accept="image/*" class="hidden" style="display:none; margin-top:8px" />
+
+    <label>View</label>
+    <select id="view">
+      <option value="toggle">Toggle (flip ON/OFF in place)</option>
+      <option value="side">Side by side (original | corrected)</option>
+    </select>
+
+    <label>Which eye?</label>
+    <select id="mode">
+      <option value="right">Right eye (cover left)</option>
+      <option value="left">Left eye (cover right)</option>
+      <option value="both">Both — averaged compromise</option>
+    </select>
+
+    <div class="eyeHead">RIGHT eye (OD)</div>
+    <div class="row">
+      <div><label>Sph</label><input id="rs" type="number" step="0.25" value="-2.5" /></div>
+      <div><label>Cyl</label><input id="rc" type="number" step="0.25" value="-1.0" /></div>
+      <div><label>Axis</label><input id="ra" type="number" step="5" value="110" /></div>
+    </div>
+    <div class="eyeHead">LEFT eye (OS)</div>
+    <div class="row">
+      <div><label>Sph</label><input id="ls" type="number" step="0.25" value="-2.25" /></div>
+      <div><label>Cyl</label><input id="lc" type="number" step="0.25" value="-0.75" /></div>
+      <div><label>Axis</label><input id="la" type="number" step="5" value="70" /></div>
+    </div>
+
+    <label>Distance <span class="val" id="distV">35</span> cm</label>
+    <input id="dist" type="range" min="20" max="80" value="35" />
+    <label>Screen PPI <span class="val" id="ppiV">140</span></label>
+    <input id="ppi" type="range" min="80" max="460" value="140" />
+    <label>Correction strength <span class="val" id="csV">1.00</span></label>
+    <input id="cs" type="range" min="0" max="1.5" step="0.05" value="1.0" />
+    <label>Contrast headroom <span class="val" id="drV">0.55</span></label>
+    <input id="dr" type="range" min="0.25" max="1" step="0.05" value="0.55" />
+    <label>Regularization K <span class="val" id="regV">0.012</span></label>
+    <input id="reg" type="range" min="0.002" max="0.05" step="0.002" value="0.012" />
+    <div class="meta" id="blurMeta" style="margin-top:12px; text-align:left"></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="spinner" id="spin" style="display:none">rendering…</div>
+    <div class="canvasWrap" id="wrap">
+      <figure id="figA"><canvas id="dispA" class="disp"></canvas><figcaption id="capA"></figcaption></figure>
+      <figure id="figB" style="display:none"><canvas id="dispB" class="disp"></canvas><figcaption id="capB"></figcaption></figure>
+    </div>
+    <button class="bigToggle on" id="toggle">Correction: ON</button>
+    <div class="hint" id="hint">Flip ON/OFF and compare. Look for the smaller letters becoming readable. The corrected image is greyer — that contrast trade is expected.</div>
+  </div>
+</main>
+
+<script>// VisionCorrect engine — pure JavaScript port of backend/vision_engine.
+// No dependencies, runs in the browser (and in Node for testing).
+// Mirrors: optical_model.py, psf.py, deconvolution.py, color.py, renderer.py.
+//
+// Exposed on `globalThis.VC` (browser) and via module.exports (Node).
+(function (root) {
+  "use strict";
+
+  // ---- 1D FFT (iterative radix-2, in place). sign=-1 forward, +1 inverse ----
+  function fft1d(re, im, n, sign) {
+    // bit-reversal permutation
+    for (let i = 1, j = 0; i < n; i++) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) {
+        const tr = re[i]; re[i] = re[j]; re[j] = tr;
+        const ti = im[i]; im[i] = im[j]; im[j] = ti;
+      }
+    }
+    for (let len = 2; len <= n; len <<= 1) {
+      const ang = sign * 2 * Math.PI / len;
+      const wr = Math.cos(ang), wi = Math.sin(ang);
+      for (let i = 0; i < n; i += len) {
+        let cr = 1, ci = 0;
+        for (let k = 0; k < len / 2; k++) {
+          const a = i + k, b = i + k + len / 2;
+          const xr = re[b] * cr - im[b] * ci;
+          const xi = re[b] * ci + im[b] * cr;
+          re[b] = re[a] - xr; im[b] = im[a] - xi;
+          re[a] += xr;        im[a] += xi;
+          const ncr = cr * wr - ci * wi;
+          ci = cr * wi + ci * wr; cr = ncr;
+        }
+      }
+    }
+  }
+
+  // ---- 2D FFT over W*H arrays (row-major). sign=-1 forward, +1 inverse ----
+  function fft2(re, im, W, H, sign) {
+    const rr = new Float64Array(W), ri = new Float64Array(W);
+    for (let y = 0; y < H; y++) {
+      const off = y * W;
+      for (let x = 0; x < W; x++) { rr[x] = re[off + x]; ri[x] = im[off + x]; }
+      fft1d(rr, ri, W, sign);
+      for (let x = 0; x < W; x++) { re[off + x] = rr[x]; im[off + x] = ri[x]; }
+    }
+    const cr = new Float64Array(H), ci = new Float64Array(H);
+    for (let x = 0; x < W; x++) {
+      for (let y = 0; y < H; y++) { cr[y] = re[y * W + x]; ci[y] = im[y * W + x]; }
+      fft1d(cr, ci, H, sign);
+      for (let y = 0; y < H; y++) { re[y * W + x] = cr[y]; im[y * W + x] = ci[y]; }
+    }
+    if (sign > 0) {
+      const inv = 1 / (W * H);
+      for (let i = 0; i < W * H; i++) { re[i] *= inv; im[i] *= inv; }
+    }
+  }
+
+  // ---- PSF: rotated anisotropic Gaussian, normalised (sum==1) ----
+  function generatePsf(size, sigmaX, sigmaY, angleDeg) {
+    sigmaX = Math.max(sigmaX, 1e-3); sigmaY = Math.max(sigmaY, 1e-3);
+    const c = (size - 1) / 2, th = angleDeg * Math.PI / 180;
+    const cos = Math.cos(th), sin = Math.sin(th);
+    const psf = new Float64Array(size * size);
+    let sum = 0;
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const dx = x - c, dy = y - c;
+      const xr = dx * cos + dy * sin, yr = -dx * sin + dy * cos;
+      const v = Math.exp(-0.5 * ((xr / sigmaX) ** 2 + (yr / sigmaY) ** 2));
+      psf[y * size + x] = v; sum += v;
+    }
+    for (let i = 0; i < psf.length; i++) psf[i] /= sum;
+    return psf;
+  }
+
+  function kernelSizeForSigma(sigma) {
+    let s = Math.ceil(sigma * 6) | 1; return Math.max(s, 3);
+  }
+
+  const nextPow2 = n => { let p = 1; while (p < n) p <<= 1; return p; };
+
+  // Embed a (possibly larger-than-image) PSF into WxH with its centre at origin.
+  function psfToPadded(psf, ksize, W, H) {
+    // center-crop if larger than image, then renormalise
+    let src = psf, ph = ksize, pw = ksize;
+    if (ksize > H || ksize > W) {
+      const nh = Math.min(ksize, H), nw = Math.min(ksize, W);
+      const ch = ksize >> 1, cw = ksize >> 1, h2 = nh >> 1, w2 = nw >> 1;
+      const cropped = new Float64Array(nh * nw); let s = 0;
+      for (let y = 0; y < nh; y++) for (let x = 0; x < nw; x++) {
+        const v = psf[(ch - h2 + y) * ksize + (cw - w2 + x)];
+        cropped[y * nw + x] = v; s += v;
+      }
+      for (let i = 0; i < cropped.length; i++) cropped[i] /= s;
+      src = cropped; ph = nh; pw = nw;
+    }
+    const re = new Float64Array(W * H);
+    const shy = ph >> 1, shx = pw >> 1;
+    for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++) {
+      const ty = ((y - shy) % H + H) % H, tx = ((x - shx) % W + W) % W;
+      re[ty * W + tx] = src[y * pw + x];
+    }
+    return re;
+  }
+
+  // Regularised (Wiener) inverse filter of a single 2-D channel.
+  // img: Float64Array length W*H (linear light). Returns Float64Array (may exceed [0,1]).
+  function wienerPrecompensate(img, W, H, psf, ksize, K) {
+    K = Math.max(K, 1e-8);
+    const hre = psfToPadded(psf, ksize, W, H), him = new Float64Array(W * H);
+    fft2(hre, him, W, H, -1);
+    const ire = Float64Array.from(img), iim = new Float64Array(W * H);
+    fft2(ire, iim, W, H, -1);
+    const N = W * H, ore = new Float64Array(N), oim = new Float64Array(N);
+    for (let i = 0; i < N; i++) {
+      const mag = hre[i] * hre[i] + him[i] * him[i] + K;
+      const gre = hre[i] / mag, gim = -him[i] / mag;    // conj(H)/(|H|^2+K)
+      ore[i] = ire[i] * gre - iim[i] * gim;
+      oim[i] = ire[i] * gim + iim[i] * gre;
+    }
+    fft2(ore, oim, W, H, +1);
+    return ore; // real part
+  }
+
+  // Forward blur (simulate the eye). Same FFT machinery.
+  function applyPsf(img, W, H, psf, ksize) {
+    const hre = psfToPadded(psf, ksize, W, H), him = new Float64Array(W * H);
+    fft2(hre, him, W, H, -1);
+    const ire = Float64Array.from(img), iim = new Float64Array(W * H);
+    fft2(ire, iim, W, H, -1);
+    const N = W * H, ore = new Float64Array(N), oim = new Float64Array(N);
+    for (let i = 0; i < N; i++) {
+      ore[i] = ire[i] * hre[i] - iim[i] * him[i];
+      oim[i] = ire[i] * him[i] + iim[i] * hre[i];
+    }
+    fft2(ore, oim, W, H, +1);
+    return ore;
+  }
+
+  // ---- colour ----
+  const srgbToLinear = x => (x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4));
+  const linearToSrgb = x => (x <= 0.0031308 ? x * 12.92 : 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
+
+  // ---- optical model ----
+  const MM_PER_INCH = 25.4;
+  function prescriptionToBlur(p, viewingDistanceMm, ppi, opts) {
+    opts = opts || {};
+    const pupil = (opts.pupilMm || 4.0) / 1000;
+    const sigmaPerDia = opts.sigmaPerDiameter || 0.25;
+    const minSigma = opts.minSigmaPx || 0.35;
+    const strength = opts.correctionStrength == null ? 1.0 : opts.correctionStrength;
+    const pitch = MM_PER_INCH / ppi;
+    const diaPx = D => (pupil * Math.abs(D)) * viewingDistanceMm / pitch;
+    const d1 = diaPx(p.sphere), d2 = diaPx(p.sphere + p.cylinder);
+    return {
+      sigmaX: Math.max(d1 * sigmaPerDia * strength, minSigma),
+      sigmaY: Math.max(d2 * sigmaPerDia * strength, minSigma),
+      angle: p.axis,
+    };
+  }
+
+  // ---- combine sphero-cylindrical prescriptions via dioptric power vectors ----
+  // A screen shows one image to both eyes, so binocular use needs a single Rx.
+  // Naive averaging of axis is wrong; the correct method converts each Rx to the
+  // (M, J0, J45) power-vector space, averages there, and converts back.
+  function averagePrescriptions(list) {
+    let M = 0, J0 = 0, J45 = 0;
+    for (const p of list) {
+      const c = p.cylinder || 0, a = (p.axis || 0) * Math.PI / 180;
+      M += p.sphere + c / 2;
+      J0 += -(c / 2) * Math.cos(2 * a);
+      J45 += -(c / 2) * Math.sin(2 * a);
+    }
+    const n = list.length || 1; M /= n; J0 /= n; J45 /= n;
+    const Jmag = Math.sqrt(J0 * J0 + J45 * J45);
+    const cylinder = -2 * Jmag;                 // minus-cyl convention
+    const sphere = M - cylinder / 2;
+    let axis = 0.5 * Math.atan2(J45, J0) * 180 / Math.PI;
+    axis = ((axis % 180) + 180) % 180;
+    return { sphere, cylinder, axis };
+  }
+
+  // Resolve an eye-mode ("right" | "left" | "both") + a two-eye profile into the
+  // single prescription to render with.
+  function resolveRx(mode, rightEye, leftEye) {
+    if (mode === "left") return leftEye;
+    if (mode === "both") return averagePrescriptions([rightEye, leftEye]);
+    return rightEye;
+  }
+
+  // ---- full render pipeline on an ImageData-like {data,width,height} ----
+  // Returns a new Uint8ClampedArray (RGBA). precompensate=false => contrast-only control.
+  function render(rgba, W, H, prescription, opts) {
+    opts = opts || {};
+    const dr = opts.dynamicRange == null ? 0.55 : opts.dynamicRange;
+    const K = opts.regularization == null ? 0.012 : opts.regularization;
+    const contrastBoost = opts.contrastBoost == null ? 1.0 : opts.contrastBoost;
+    const precomp = opts.precompensate !== false;
+    const blur = prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
+      opts.ppi || 264, { correctionStrength: opts.correctionStrength });
+    const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
+    const psf = generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle);
+
+    // work at power-of-two padded size to keep the FFT radix-2
+    const PW = nextPow2(W), PH = nextPow2(H);
+    const out = new Uint8ClampedArray(rgba.length);
+    let clipped = 0;
+    const chan = new Float64Array(PW * PH);
+    for (let c = 0; c < 3; c++) {
+      // load channel into padded buffer (edge-replicate padding)
+      for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
+        const sx = Math.min(x, W - 1), sy = Math.min(y, H - 1);
+        const lin = srgbToLinear(rgba[(sy * W + sx) * 4 + c] / 255);
+        chan[y * PW + x] = 0.5 + (lin - 0.5) * dr;         // contrast reduction
+      }
+      let res;
+      if (precomp) res = wienerPrecompensate(chan, PW, PH, psf, ksize, K);
+      else res = chan;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        let v = res[y * PW + x];
+        if (v < 0 || v > 1) clipped++;
+        v = Math.min(1, Math.max(0, 0.5 + (v - 0.5) * contrastBoost));
+        out[(y * W + x) * 4 + c] = Math.round(linearToSrgb(v) * 255);
+      }
+    }
+    for (let i = 3; i < out.length; i += 4) out[i] = 255; // alpha
+    return { data: out, blur, ksize, clippedFraction: clipped / (3 * W * H) };
+  }
+
+  // Simulate what the prescribed eye perceives when looking at an RGBA image.
+  function simulateEyeView(rgba, W, H, prescription, opts) {
+    opts = opts || {};
+    const blur = prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
+      opts.ppi || 264, { correctionStrength: opts.correctionStrength });
+    const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
+    const psf = generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle);
+    const PW = nextPow2(W), PH = nextPow2(H);
+    const out = new Uint8ClampedArray(rgba.length);
+    const chan = new Float64Array(PW * PH);
+    for (let c = 0; c < 3; c++) {
+      for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
+        const sx = Math.min(x, W - 1), sy = Math.min(y, H - 1);
+        chan[y * PW + x] = srgbToLinear(rgba[(sy * W + sx) * 4 + c] / 255);
+      }
+      const res = applyPsf(chan, PW, PH, psf, ksize);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const v = Math.min(1, Math.max(0, res[y * PW + x]));
+        out[(y * W + x) * 4 + c] = Math.round(linearToSrgb(v) * 255);
+      }
+    }
+    for (let i = 3; i < out.length; i += 4) out[i] = 255;
+    return out;
+  }
+
+  const VC = {
+    fft1d, fft2, generatePsf, kernelSizeForSigma, nextPow2, psfToPadded,
+    wienerPrecompensate, applyPsf, srgbToLinear, linearToSrgb,
+    prescriptionToBlur, render, simulateEyeView,
+    averagePrescriptions, resolveRx,
+  };
+  root.VC = VC;
+  if (typeof module !== "undefined" && module.exports) module.exports = VC;
+})(typeof globalThis !== "undefined" ? globalThis : this);
+</script>
+<script>
+const $ = id => document.getElementById(id);
+const SIZE = 512; // content is rendered 1:1 at this size (blur is in real screen pixels)
+
+// ---- content builders (512x512, or 512xH for text) ----
+function build(kind){
+  const c=document.createElement('canvas'); c.width=SIZE; c.height=kind==='text'?384:SIZE;
+  const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,c.width,c.height); x.fillStyle='#000';
+  if(kind==='text'){
+    const lines=['The quick brown fox jumps over','the lazy dog. 1234567890.',
+      'Pre-compensation trades a little','contrast for a lot of sharpness.',
+      'Can you read this smaller line?','and this even smaller one?'];
+    let y=54,s=40; x.textAlign='left';
+    lines.forEach(L=>{ x.font=`${s}px Georgia`; x.fillText(L,26,y); y+=s+12; s=Math.max(15,s-4); });
+  } else if(kind==='grating'){
+    x.textAlign='center'; x.font='bold 40px Arial'; x.fillText('spatial frequency',SIZE/2,44);
+    for(let band=0,yy=80; band<5; band++,yy+=84){ const w=1+band; for(let xx=30;xx<SIZE-30;xx+=w*2){ x.fillRect(xx,yy,w,64);}
+      x.font='12px Arial'; x.fillText(`${w}px lines`,SIZE/2,yy+78); }
+  } else {
+    x.textAlign='center'; const rows=[['E',120],['F P',80],['T O Z',56],['L P E D',40],['P E C F D',30]]; let y=30;
+    rows.forEach(([t,s])=>{ x.font=`bold ${s}px Arial`; x.fillText(t,SIZE/2,y+s*0.82); y+=s+18; });
+  }
+  return c;
+}
+
+let uploaded=null;
+$('content').addEventListener('change',()=>{ $('file').style.display=$('content').value==='upload'?'block':'none'; recompute(); });
+$('file').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f)return; const img=new Image();
+  img.onload=()=>{ const c=document.createElement('canvas'); const sc=Math.min(1,SIZE/Math.max(img.width,img.height));
+    c.width=Math.max(1,Math.round(img.width*sc)); c.height=Math.max(1,Math.round(img.height*sc));
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height); uploaded=c; recompute(); };
+  img.src=URL.createObjectURL(f); });
+
+// ---- prescription + options ----
+function rx(){ const R={sphere:+$('rs').value,cylinder:+$('rc').value,axis:+$('ra').value},
+  L={sphere:+$('ls').value,cylinder:+$('lc').value,axis:+$('la').value};
+  return VC.resolveRx($('mode').value,R,L); }
+function opts(){ return { viewingDistanceMm:(+$('dist').value)*10, ppi:+$('ppi').value,
+  correctionStrength:+$('cs').value, dynamicRange:+$('dr').value, regularization:+$('reg').value, precompensate:true }; }
+
+// ---- render + cache (toggle is instant; recompute only on settings change) ----
+let cache={ orig:null, corr:null, W:0, H:0 };
+let showOn=true, viewMode='toggle', timer=null;
+
+function recompute(){
+  syncLabels();
+  if(timer) clearTimeout(timer);
+  $('spin').style.display='block';
+  timer=setTimeout(()=>{
+    const kind=$('content').value;
+    const src=(kind==='upload'&&uploaded)?uploaded:build(kind);
+    const W=src.width,H=src.height; const orig=src.getContext('2d').getImageData(0,0,W,H);
+    const res=VC.render(orig.data,W,H,rx(),opts());
+    cache={ orig, corr:new ImageData(new Uint8ClampedArray(res.data),W,H), W, H };
+    const r=rx();
+    $('blurMeta').innerHTML=`applied Rx ${r.sphere.toFixed(2)} / ${r.cylinder.toFixed(2)} × ${Math.round(r.axis)}°<br>`+
+      `blur σx=${res.blur.sigmaX.toFixed(1)}px σy=${res.blur.sigmaY.toFixed(1)}px @${res.blur.angle}° · PSF ${res.ksize}×${res.ksize} · clipped ${(res.clippedFraction*100).toFixed(0)}%`;
+    $('spin').style.display='none';
+    redraw();
+  }, 220);
+}
+
+function drawTo(canvasId, imgData){ const cv=$(canvasId); cv.width=imgData.width; cv.height=imgData.height;
+  cv.getContext('2d').putImageData(imgData,0,0); }
+
+function redraw(){
+  if(!cache.corr) return;
+  if(viewMode==='side'){
+    $('figB').style.display=''; $('toggle').style.display='none';
+    drawTo('dispA',cache.orig); $('capA').textContent='OFF — original';
+    drawTo('dispB',cache.corr); $('capB').textContent='ON — corrected (look here with glasses off)';
+  } else {
+    $('figB').style.display='none'; $('toggle').style.display='';
+    drawTo('dispA', showOn?cache.corr:cache.orig);
+    $('capA').textContent = showOn?'ON — corrected':'OFF — original';
+    $('toggle').textContent = 'Correction: '+(showOn?'ON':'OFF');
+    $('toggle').classList.toggle('on', showOn);
+  }
+}
+
+function syncLabels(){ $('distV').textContent=$('dist').value; $('ppiV').textContent=$('ppi').value;
+  $('csV').textContent=(+$('cs').value).toFixed(2); $('drV').textContent=(+$('dr').value).toFixed(2);
+  $('regV').textContent=(+$('reg').value).toFixed(3); }
+
+// ---- interactions ----
+$('toggle').addEventListener('click',()=>{ showOn=!showOn; redraw(); });
+$('view').addEventListener('change',()=>{ viewMode=$('view').value; redraw(); });
+['mode','rs','rc','ra','ls','lc','la','dist','ppi','cs','dr','reg'].forEach(id=>$(id).addEventListener('input',recompute));
+document.addEventListener('keydown',e=>{ if(e.code==='Space'){ e.preventDefault(); if(viewMode==='toggle'){ showOn=!showOn; redraw(); } }
+  else if(e.key==='f'||e.key==='F'){ toggleFs(); } });
+function toggleFs(){ if(!document.fullscreenElement) $('stage').requestFullscreen?.(); else document.exitFullscreen?.(); }
+$('fs').addEventListener('click',toggleFs);
+
+syncLabels(); recompute();
+</script>
+</body>
+</html>

@@ -56,5 +56,11 @@ async def distance_adaptive() -> FileResponse:
     return FileResponse(os.path.join(_STATIC_DIR, "distance.html"))
 
 
+@app.get("/selftest", include_in_schema=False)
+async def selftest() -> FileResponse:
+    """Big live pre-distortion viewer for testing on your own eyes."""
+    return FileResponse(os.path.join(_STATIC_DIR, "selftest.html"))
+
+
 if os.path.isdir(_STATIC_DIR):
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
