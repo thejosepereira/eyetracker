@@ -43,7 +43,15 @@ panel 2 become legible. The cost is contrast: panel 4 is greyer, because a norma
 display can't show the negative/over-bright values full inversion needs, so we
 trade contrast for sharpness (see *dynamic range* below).
 
-## Try it in a browser
+## No-install option: one self-contained HTML file
+
+Don't want to run a server? Open **[`standalone/visioncorrect.html`](standalone/visioncorrect.html)**
+in any browser. The entire engine (FFT-based correction, eye simulation) and the
+human test harness run locally in JavaScript — no backend, works offline, works on
+a phone. It's numerically identical to the Python engine (verified to ~1e-15).
+See [`standalone/README.md`](standalone/README.md).
+
+## Try it in a browser (with the backend)
 
 ```bash
 cd backend

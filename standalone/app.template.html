@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VisionCorrect (standalone)</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1115; --card:#181b22; --line:#2a2f3a;
+          --fg:#e8eaed; --muted:#9aa0ab; --accent:#5b9dff; --good:#37d67a; --bad:#ff6b6b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:16px 24px; border-bottom:1px solid var(--line); }
+  h1 { margin:0; font-size:18px; }
+  .sub { color:var(--muted); font-size:13px; margin-top:3px; }
+  .tabs { display:flex; gap:8px; padding:12px 24px 0; }
+  .tabs button { background:#232838; color:var(--fg); border:1px solid var(--line); border-radius:8px 8px 0 0;
+                 padding:10px 16px; font-weight:600; cursor:pointer; }
+  .tabs button.active { background:var(--card); border-bottom-color:var(--card); color:var(--accent); }
+  main { max-width:900px; margin:0 auto; padding:20px 24px 48px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:16px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:12px 0 4px; }
+  input, select { width:100%; background:#232838; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:8px; font-size:14px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:110px; }
+  button.act { background:var(--accent); color:#031024; border:0; padding:12px 16px; border-radius:8px; font-weight:700; cursor:pointer; font-size:15px; }
+  button.ghost { background:#232838; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:12px 16px; font-weight:600; cursor:pointer; font-size:15px; }
+  button:disabled { opacity:.5; cursor:default; }
+  .banner { background:#2a2f3a; border-radius:8px; padding:10px 14px; font-size:13px; margin-bottom:16px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  figure { margin:0; background:#000; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  figure canvas { width:100%; display:block; background:#fff; }
+  figcaption { padding:8px 10px; font-size:12px; color:var(--muted); }
+  figcaption b { color:var(--fg); }
+  .meta { font-size:12px; color:var(--muted); margin-top:12px; }
+  .stimWrap { display:flex; flex-direction:column; align-items:center; gap:18px; padding:16px 0; }
+  #stim { background:#fff; border-radius:4px; }
+  .keys { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; width:100%; max-width:420px; }
+  .keys button { font-size:22px; font-weight:800; padding:14px 0; background:#232838; color:var(--fg); border:1px solid var(--line); border-radius:8px; cursor:pointer; }
+  .keys button:hover { border-color:var(--accent); }
+  .progress { height:6px; background:#232838; border-radius:3px; overflow:hidden; }
+  .progress > div { height:100%; background:var(--accent); width:0; transition:width .2s; }
+  table { width:100%; border-collapse:collapse; margin-top:8px; }
+  th,td { text-align:left; padding:8px; border-bottom:1px solid var(--line); font-size:14px; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; background:#232838; }
+  .muted { color:var(--muted); font-size:12px; }
+  .big { font-size:26px; font-weight:800; }
+  .disclaimer { color:var(--muted); font-size:11px; margin-top:16px; line-height:1.5; border-top:1px dashed var(--line); padding-top:12px; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>VisionCorrect — standalone</h1>
+  <div class="sub">Runs entirely in your browser. No server, works offline. Correction, eye simulation and the human test are all computed locally.</div>
+</header>
+
+<div class="tabs">
+  <button id="tabDemo" class="active" onclick="showTab('demo')">Demo</button>
+  <button id="tabTest" onclick="showTab('test')">Human test</button>
+</div>
+
+<main>
+  <!-- ===================== DEMO ===================== -->
+  <section id="demo">
+    <div class="card">
+      <div class="row">
+        <div><label>Test image</label>
+          <select id="preset"><option value="eyechart">Eye chart</option><option value="text">Text page</option><option value="upload">Upload…</option></select>
+        </div>
+        <div><label>Sphere (D)</label><input id="d_sphere" type="number" step="0.25" value="-2.5" /></div>
+        <div><label>Cylinder (D)</label><input id="d_cyl" type="number" step="0.25" value="-1.0" /></div>
+        <div><label>Axis (°)</label><input id="d_axis" type="number" step="5" value="110" /></div>
+      </div>
+      <input type="file" id="d_file" accept="image/*" class="hidden" style="margin-top:8px" />
+      <div class="row">
+        <div><label>Distance (cm)</label><input id="d_dist" type="number" value="35" /></div>
+        <div><label>Screen PPI</label><input id="d_ppi" type="number" value="264" /></div>
+        <div><label>Correction strength</label><input id="d_cs" type="number" step="0.05" value="1.0" /></div>
+        <div><label>Contrast headroom</label><input id="d_dr" type="number" step="0.05" value="0.55" /></div>
+      </div>
+      <button class="act" style="margin-top:16px" onclick="runDemo()">Render</button>
+      <div class="meta" id="d_meta"></div>
+    </div>
+    <div class="grid">
+      <figure><canvas id="c_original"></canvas><figcaption><b>1. Original</b> — what we want you to see</figcaption></figure>
+      <figure><canvas id="c_uncorrected"></canvas><figcaption><b>2. Eye view, correction OFF</b> — blurry</figcaption></figure>
+      <figure><canvas id="c_precomp"></canvas><figcaption><b>3. Shown on screen</b> — pre-distorted</figcaption></figure>
+      <figure><canvas id="c_corrected"></canvas><figcaption><b>4. Eye view, correction ON</b> — perceived</figcaption></figure>
+    </div>
+    <div class="disclaimer">Experimental technology, not a medical device and not a replacement for prescribed eyewear.
+      Panels 2 &amp; 4 <i>simulate</i> the prescription so you can judge the effect on a normal screen.</div>
+  </section>
+
+  <!-- ===================== TEST ===================== -->
+  <section id="test" class="hidden">
+    <!-- setup -->
+    <div id="t_setup">
+      <div class="banner"><b>Before you start:</b> glasses/contacts off, cover the eye you are <i>not</i> testing,
+        keep the screen at the set distance. Test one eye at a time with that eye's prescription.</div>
+      <div class="card">
+        <div class="row">
+          <div><label>Subject ID</label><input id="t_subject" value="S01" /></div>
+          <div><label>Eye under test</label><select id="t_eye"><option value="right">Right (OD)</option><option value="left">Left (OS)</option></select></div>
+        </div>
+        <div class="row">
+          <div><label>Sphere (D)</label><input id="t_sphere" type="number" step="0.25" value="-2.5" /></div>
+          <div><label>Cylinder (D)</label><input id="t_cyl" type="number" step="0.25" value="-1.0" /></div>
+          <div><label>Axis (°)</label><input id="t_axis" type="number" step="5" value="110" /></div>
+        </div>
+        <div class="row">
+          <div><label>Distance (cm)</label><input id="t_dist" type="number" value="35" /></div>
+          <div><label>Screen PPI</label><input id="t_ppi" type="number" value="264" /></div>
+          <div><label>Letter box (px)</label><input id="t_box" type="number" value="120" /></div>
+        </div>
+        <div class="row">
+          <div><label>Trials / condition</label><input id="t_trials" type="number" value="15" /></div>
+          <div><label>Correction strength</label><input id="t_cs" type="number" step="0.05" value="1.0" /></div>
+          <div><label>Contrast headroom</label><input id="t_dr" type="number" step="0.05" value="0.55" /></div>
+          <div><label>Regularization K</label><input id="t_reg" type="number" step="0.002" value="0.012" /></div>
+        </div>
+        <div style="margin-top:16px; display:flex; gap:10px;">
+          <button class="ghost" onclick="previewLetter()">Preview a letter</button>
+          <button class="act" onclick="startTest()">Start blinded test</button>
+        </div>
+      </div>
+      <div class="disclaimer">Three conditions per trial (shuffled, never shown): <b>A</b> original ·
+        <b>B</b> contrast-reduced only (control) · <b>C</b> full correction. The meaningful result is <b>C&nbsp;−&nbsp;B</b>.
+        Set the letter box so condition A accuracy is ~50–70%. Beyond informal testing, obtain ethics/IRB review and a vision professional.</div>
+    </div>
+    <!-- run -->
+    <div id="t_run" class="hidden">
+      <div class="progress"><div id="t_bar"></div></div>
+      <div class="muted" id="t_counter" style="margin-top:6px"></div>
+      <div class="card"><div class="stimWrap">
+        <canvas id="stim" width="120" height="120"></canvas>
+        <div class="muted">Which letter did you see? (type it or click)</div>
+        <div class="keys" id="t_keys"></div>
+        <button class="ghost" id="t_cant" onclick="respond('?')">Can't tell / guess</button>
+      </div></div>
+    </div>
+    <!-- results -->
+    <div id="t_results" class="hidden">
+      <div class="card">
+        <div class="big">Results</div>
+        <div class="muted" id="t_summary"></div>
+        <table><thead><tr><th>Condition</th><th>What it is</th><th class="num">Trials</th><th class="num">Correct</th><th class="num">Accuracy</th></tr></thead><tbody id="t_tbody"></tbody></table>
+        <div id="t_verdict" style="margin-top:16px"></div>
+        <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="ghost" onclick="dl('csv')">Download CSV</button>
+          <button class="ghost" onclick="dl('json')">Download JSON</button>
+          <button class="act" onclick="newRun()">New run</button>
+        </div>
+        <div class="disclaimer">The meaningful comparison is <b>C vs B</b> (both contrast-reduced): if C beats B the pre-distortion helped.
+          One session is not evidence — repeat across eyes, sessions and subjects with proper statistics.</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+/*__ENGINE__*/
+</script>
+<script>
+const $ = id => document.getElementById(id);
+function showTab(t){ $('demo').classList.toggle('hidden',t!=='demo'); $('test').classList.toggle('hidden',t!=='test');
+  $('tabDemo').classList.toggle('active',t==='demo'); $('tabTest').classList.toggle('active',t==='test'); }
+
+// ---------- shared: draw an RGBA buffer to a canvas ----------
+function draw(canvasId, rgba, W, H){ const cv=$(canvasId); cv.width=W; cv.height=H;
+  const id=new ImageData(new Uint8ClampedArray(rgba), W, H); cv.getContext('2d').putImageData(id,0,0); }
+function canvasToRGBA(cv){ return cv.getContext('2d').getImageData(0,0,cv.width,cv.height); }
+
+// ---------- synthetic test images ----------
+function makeImage(kind){ const c=document.createElement('canvas'); c.width=384; c.height=384; const x=c.getContext('2d');
+  x.fillStyle='#fff'; x.fillRect(0,0,384,384); x.fillStyle='#000';
+  if(kind==='text'){ const L=['The quick brown fox','jumps over the lazy dog','1234567890','smaller text is the','real test — readable?']; let y=54,s=34;
+    L.forEach(t=>{ x.font=`${s}px Georgia`; x.fillText(t,24,y); y+=s+12; s=Math.max(16,s-3); }); }
+  else { x.textAlign='center'; const rows=[['E',96],['F P',62],['T O Z',44],['L P E D',32],['P E C F D',24]]; let y=30;
+    rows.forEach(([t,s])=>{ x.font=`bold ${s}px Arial`; x.fillText(t,192,y+s*0.8); y+=s+18; });
+    for(let i=0,xx=30;xx<354;xx+=8,i++) x.fillRect(xx,344,i%2?2:1,28); }
+  return c; }
+
+$('preset').addEventListener('change',()=>$('d_file').classList.toggle('hidden',$('preset').value!=='upload'));
+let uploaded=null;
+$('d_file').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f) return; const img=new Image();
+  img.onload=()=>{ const c=document.createElement('canvas'); const sc=Math.min(1,384/Math.max(img.width,img.height));
+    c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc); c.getContext('2d').drawImage(img,0,0,c.width,c.height); uploaded=c; runDemo(); };
+  img.src=URL.createObjectURL(f); });
+
+function demoOpts(){ return { viewingDistanceMm:(+$('d_dist').value)*10, ppi:+$('d_ppi').value,
+  correctionStrength:+$('d_cs').value, dynamicRange:+$('d_dr').value }; }
+function demoRx(){ return { sphere:+$('d_sphere').value, cylinder:+$('d_cyl').value, axis:+$('d_axis').value }; }
+
+function runDemo(){
+  const kind=$('preset').value; const src=(kind==='upload'&&uploaded)?uploaded:makeImage(kind);
+  const W=src.width,H=src.height; const orig=canvasToRGBA(src); const rx=demoRx(), opts=demoOpts();
+  draw('c_original', orig.data, W, H);
+  const unc=VC.simulateEyeView(orig.data,W,H,rx,opts); draw('c_uncorrected',unc,W,H);
+  const res=VC.render(orig.data,W,H,rx,{...opts,precompensate:true}); draw('c_precomp',res.data,W,H);
+  const cor=VC.simulateEyeView(res.data,W,H,rx,opts); draw('c_corrected',cor,W,H);
+  $('d_meta').textContent=`blur σx=${res.blur.sigmaX.toFixed(1)}px σy=${res.blur.sigmaY.toFixed(1)}px @${res.blur.angle}° · PSF ${res.ksize}×${res.ksize} · clipped ${(res.clippedFraction*100).toFixed(1)}%`;
+}
+
+// ---------- human test ----------
+const SLOAN=['C','D','H','K','N','O','R','S','V','Z'];
+const CONDS={ A:{label:'Original (no change)',precomp:false,useDR:false},
+              B:{label:'Contrast-reduced only (control)',precomp:false,useDR:true},
+              C:{label:'Full VisionCorrect correction',precomp:true,useDR:true} };
+let T=null;
+function tcfg(){ return { subject:$('t_subject').value.trim()||'S01', eye:$('t_eye').value,
+  sphere:+$('t_sphere').value, cylinder:+$('t_cyl').value, axis:+$('t_axis').value,
+  distanceCm:+$('t_dist').value, ppi:+$('t_ppi').value, box:Math.max(24,parseInt($('t_box').value)||120),
+  trialsPer:Math.max(1,parseInt($('t_trials').value)||15), cs:+$('t_cs').value, dr:+$('t_dr').value, reg:+$('t_reg').value }; }
+
+function letterCanvas(letter,box){ const c=document.createElement('canvas'); c.width=box; c.height=box; const x=c.getContext('2d');
+  x.fillStyle='#fff'; x.fillRect(0,0,box,box); x.fillStyle='#000'; x.textAlign='center'; x.textBaseline='middle';
+  x.font=`bold ${Math.round(box*0.72)}px Arial`; x.fillText(letter,box/2,box/2+box*0.02); return c; }
+
+function renderCondition(letter,cond,k){ const src=letterCanvas(letter,k.box); const rgba=canvasToRGBA(src);
+  const opts={ viewingDistanceMm:k.distanceCm*10, ppi:k.ppi, correctionStrength:k.cs, regularization:k.reg,
+    dynamicRange:cond.useDR?k.dr:1.0, precompensate:cond.precomp };
+  return VC.render(rgba.data, k.box, k.box, {sphere:k.sphere,cylinder:k.cylinder,axis:k.axis}, opts); }
+
+function previewLetter(){ const k=tcfg(); const res=renderCondition(SLOAN[Math.floor(Math.random()*10)],CONDS.C,k);
+  $('t_run').classList.remove('hidden'); $('t_keys').innerHTML=''; $('t_cant').classList.add('hidden');
+  $('t_counter').textContent="Preview (condition C). Adjust 'Letter box' near your threshold, then Start."; $('t_bar').style.width='0%';
+  draw('stim',res.data,k.box,k.box); }
+
+function buildSeq(k){ const s=[]; for(const key in CONDS) for(let i=0;i<k.trialsPer;i++) s.push({cond:key,letter:SLOAN[Math.floor(Math.random()*10)]});
+  for(let i=s.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [s[i],s[j]]=[s[j],s[i]]; } return s; }
+function makeKeys(){ const w=$('t_keys'); w.innerHTML=''; SLOAN.forEach(L=>{ const b=document.createElement('button'); b.textContent=L; b.onclick=()=>respond(L); w.appendChild(b); }); }
+
+function startTest(){ const k=tcfg(); if([k.sphere,k.cylinder,k.axis,k.distanceCm,k.ppi].some(isNaN)){ alert('Fill in all numeric fields.'); return; }
+  T={cfg:k,seq:buildSeq(k),i:0,results:[],shownAt:null,startedAt:new Date().toISOString()}; makeKeys();
+  $('t_cant').classList.remove('hidden'); $('t_setup').classList.add('hidden'); $('t_results').classList.add('hidden'); $('t_run').classList.remove('hidden'); showTrial(); }
+
+function showTrial(){ const k=T.cfg,t=T.seq[T.i]; $('t_counter').textContent=`Trial ${T.i+1} of ${T.seq.length}`;
+  $('t_bar').style.width=(T.i/T.seq.length*100)+'%'; const res=renderCondition(t.letter,CONDS[t.cond],k);
+  draw('stim',res.data,k.box,k.box); T.shownAt=performance.now(); }
+
+function respond(letter){ if(!T||T.shownAt==null) return; const t=T.seq[T.i]; const rt=Math.round(performance.now()-T.shownAt);
+  T.results.push({trial:T.i+1,condition:t.cond,target:t.letter,response:letter,correct:letter===t.letter?1:0,rt_ms:rt});
+  T.shownAt=null; T.i++; if(T.i>=T.seq.length) finish(); else showTrial(); }
+
+document.addEventListener('keydown',e=>{ if($('t_run').classList.contains('hidden')) return; const L=e.key.toUpperCase(); if(SLOAN.includes(L)) respond(L); });
+
+function finish(){ $('t_run').classList.add('hidden'); $('t_results').classList.remove('hidden'); const k=T.cfg;
+  const tb=$('t_tbody'); tb.innerHTML=''; const acc={};
+  for(const key in CONDS){ const sub=T.results.filter(r=>r.condition===key); const cor=sub.reduce((s,r)=>s+r.correct,0);
+    acc[key]={n:sub.length,cor,pct:sub.length?cor/sub.length*100:0};
+    const tr=document.createElement('tr'); tr.innerHTML=`<td><span class="pill">${key}</span></td><td>${CONDS[key].label}</td><td class="num">${sub.length}</td><td class="num">${cor}</td><td class="num">${acc[key].pct.toFixed(0)}%</td>`; tb.appendChild(tr); }
+  $('t_summary').textContent=`${k.subject} · ${k.eye} eye · ${k.sphere}/${k.cylinder}×${k.axis}° · ${k.distanceCm} cm · ${k.ppi} PPI · box ${k.box}px`;
+  const dCB=acc.C.pct-acc.B.pct, dCA=acc.C.pct-acc.A.pct; const col=dCB>0?'var(--good)':(dCB<0?'var(--bad)':'var(--muted)');
+  $('t_verdict').innerHTML=`<div class="big" style="color:${col}">C − B = ${dCB>=0?'+':''}${dCB.toFixed(0)} pts</div>
+    <div class="muted">Correction vs contrast-matched control (the meaningful test). C − A = ${dCA>=0?'+':''}${dCA.toFixed(0)} pts vs original. Positive C−B suggests the pre-distortion helped.</div>`; }
+
+function download(name,text,type){ const b=new Blob([text],{type}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download=name; a.click(); URL.revokeObjectURL(u); }
+function dl(kind){ const k=T.cfg; if(kind==='csv'){ const head=['subject','eye','sphere','cylinder','axis','distance_cm','ppi','letter_box_px','correction_strength','dynamic_range','regularization','trial','condition','target','response','correct','rt_ms'];
+    const lines=[head.join(',')]; for(const r of T.results) lines.push([k.subject,k.eye,k.sphere,k.cylinder,k.axis,k.distanceCm,k.ppi,k.box,k.cs,k.dr,k.reg,r.trial,r.condition,r.target,r.response,r.correct,r.rt_ms].join(','));
+    download(`visioncorrect_${k.subject}_${k.eye}.csv`,lines.join('\n'),'text/csv'); }
+  else download(`visioncorrect_${k.subject}_${k.eye}.json`,JSON.stringify({algorithmVersion:'0.1.0',startedAt:T.startedAt,config:k,trials:T.results},null,2),'application/json'); }
+function newRun(){ $('t_results').classList.add('hidden'); $('t_setup').classList.remove('hidden'); window.scrollTo(0,0); }
+
+window.addEventListener('load',runDemo);
+</script>
+</body>
+</html>
