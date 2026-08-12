@@ -101,12 +101,22 @@
     <label style="margin-top:14px">Screen PPI <span class="val" id="ppiV">140</span></label>
     <input id="ppi" type="range" min="80" max="640" value="140" />
     <button class="ghost" id="calBtn" style="width:100%; margin-top:8px">📏 Calibrate with a credit card</button>
+    <div class="eyeHead" style="margin-top:16px">Fine-tuning
+      <span style="font-weight:400; color:var(--muted)">— start at the defaults; only tweak if needed</span></div>
+
     <label>Correction strength <span class="val" id="csV">1.00</span></label>
     <input id="cs" type="range" min="0" max="1.5" step="0.05" value="1.0" />
-    <label>Contrast headroom <span class="val" id="drV">0.55</span></label>
+    <div class="meta">Recommended <b>1.0</b> (matches your full prescription). Lower = weaker correction.</div>
+
+    <label style="margin-top:10px">Contrast headroom <span class="val" id="drV">0.55</span></label>
     <input id="dr" type="range" min="0.25" max="1" step="0.05" value="0.55" />
-    <label>Regularization K <span class="val" id="regV">0.012</span></label>
+    <div class="meta">Recommended <b>0.55</b>. Lower = sharper but greyer; higher = more contrast, less sharpening.</div>
+
+    <label style="margin-top:10px">Regularization K <span class="val" id="regV">0.012</span></label>
     <input id="reg" type="range" min="0.002" max="0.05" step="0.002" value="0.012" />
+    <div class="meta">Recommended <b>0.012</b>. Higher = softer / less ringing; lower = sharper but can ring.</div>
+
+    <button class="ghost" id="resetBtn" style="width:100%; margin-top:12px">↺ Reset tuning to recommended</button>
     <div class="meta" id="blurMeta" style="margin-top:12px; text-align:left"></div>
   </div>
 
@@ -498,6 +508,9 @@ $('calRange').addEventListener('input',calUpdate);
 $('calCancel').addEventListener('click',()=>{ $('calOverlay').style.display='none'; });
 $('calUse').addEventListener('click',()=>{ const ppi=Math.round((+$('calRange').value)*25.4/CARD_MM);
   $('ppi').value=Math.min(640,Math.max(80,ppi)); $('calOverlay').style.display='none'; recompute(); });
+
+// ---- reset the three tuning sliders to recommended values ----
+$('resetBtn').addEventListener('click',()=>{ $('cs').value='1.0'; $('dr').value='0.55'; $('reg').value='0.012'; recompute(); });
 
 // ---- interactions ----
 $('toggle').addEventListener('click',()=>{ showOn=!showOn; redraw(); });
