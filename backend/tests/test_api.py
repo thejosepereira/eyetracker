@@ -80,6 +80,12 @@ def test_test_harness_served():
     assert "Human Test Harness" in r.text
 
 
+def test_distance_page_served():
+    r = client.get("/distance")
+    assert r.status_code == 200
+    assert "distance-adaptive" in r.text
+
+
 def test_invalid_image_rejected():
     r = client.post(
         "/v1/correct",

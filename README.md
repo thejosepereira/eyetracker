@@ -70,6 +70,13 @@ Open **`http://localhost:8000/test`** for a blinded, 3-condition letter-ID study
 meaningful result is *correction beats the contrast-matched control*. Full
 protocol and caveats: [`docs/testing.md`](docs/testing.md).
 
+## Distance-adaptive correction (front camera)
+
+Open **`http://localhost:8000/distance`**: the front camera estimates how far your
+face is (from iris spacing) and the correction re-renders live as you move. Manual
+slider works without a camera. How it works, accuracy, and the native-iOS/TrueDepth
+alternative: [`docs/distance-adaptation.md`](docs/distance-adaptation.md).
+
 ---
 
 ## Repository layout

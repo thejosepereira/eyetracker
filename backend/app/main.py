@@ -50,5 +50,11 @@ async def test_harness() -> FileResponse:
     return FileResponse(os.path.join(_STATIC_DIR, "test.html"))
 
 
+@app.get("/distance", include_in_schema=False)
+async def distance_adaptive() -> FileResponse:
+    """Webcam distance-adaptive correction demo (camera needs a secure context)."""
+    return FileResponse(os.path.join(_STATIC_DIR, "distance.html"))
+
+
 if os.path.isdir(_STATIC_DIR):
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")

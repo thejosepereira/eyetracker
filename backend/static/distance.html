@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VisionCorrect — Distance-adaptive</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1115; --card:#181b22; --line:#2a2f3a;
+          --fg:#e8eaed; --muted:#9aa0ab; --accent:#5b9dff; --good:#37d67a; --bad:#ff6b6b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:16px 24px; border-bottom:1px solid var(--line); }
+  h1 { margin:0; font-size:18px; } .sub { color:var(--muted); font-size:13px; margin-top:3px; }
+  main { max-width:1000px; margin:0 auto; padding:20px 24px 48px; display:grid; grid-template-columns:340px 1fr; gap:18px; }
+  @media (max-width:820px){ main{ grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:12px 0 4px; }
+  input,select { width:100%; background:#232838; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:8px; font-size:14px; }
+  .row { display:flex; gap:10px; } .row>div{ flex:1; }
+  button.act { background:var(--accent); color:#031024; border:0; padding:10px 14px; border-radius:8px; font-weight:700; cursor:pointer; width:100%; margin-top:12px; }
+  button.ghost { background:#232838; color:var(--fg); border:1px solid var(--line); padding:10px 14px; border-radius:8px; font-weight:600; cursor:pointer; width:100%; margin-top:10px; }
+  .camWrap { position:relative; width:100%; aspect-ratio:4/3; background:#000; border-radius:10px; overflow:hidden; }
+  video,canvas.overlay { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+  .readout { display:flex; align-items:baseline; gap:8px; margin-top:12px; }
+  .dist { font-size:40px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .distUnit { color:var(--muted); } .status { font-size:12px; color:var(--muted); margin-top:4px; min-height:16px; }
+  .outWrap { background:#000; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  #out { width:100%; display:block; background:#fff; }
+  .meta { font-size:12px; color:var(--muted); margin-top:10px; }
+  .toggleRow { display:flex; align-items:center; justify-content:space-between; margin-top:12px; }
+  .disclaimer { color:var(--muted); font-size:11px; margin-top:16px; line-height:1.5; border-top:1px dashed var(--line); padding-top:12px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; background:#232838; }
+</style>
+</head>
+<body>
+<header>
+  <h1>VisionCorrect — distance-adaptive correction</h1>
+  <div class="sub">The front camera estimates how far your face is from the screen; the correction re-renders live as you move. Camera frames never leave your device.</div>
+</header>
+
+<main>
+  <div>
+    <div class="card">
+      <div class="camWrap">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="overlay" class="overlay"></canvas>
+      </div>
+      <div class="readout"><span class="dist" id="distVal">—</span><span class="distUnit">cm</span>
+        <span class="badge" id="srcBadge" style="margin-left:auto">no camera</span></div>
+      <div class="status" id="status">Click "Start camera" and allow access.</div>
+      <button class="act" id="startCam">Start camera</button>
+      <button class="ghost" id="calibrate" disabled>Calibrate: I'm at this distance now →</button>
+      <div class="row">
+        <div><label>Known distance for calibration (cm)</label><input id="calibCm" type="number" value="40" /></div>
+      </div>
+
+      <label style="margin-top:16px">Manual distance (no camera) — <span id="manVal">35</span> cm</label>
+      <input id="manual" type="range" min="15" max="90" value="35" />
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="row">
+        <div><label>Sphere (D)</label><input id="sphere" type="number" step="0.25" value="-2.5" /></div>
+        <div><label>Cylinder (D)</label><input id="cyl" type="number" step="0.25" value="-1.0" /></div>
+        <div><label>Axis (°)</label><input id="axis" type="number" step="5" value="110" /></div>
+      </div>
+      <div class="row">
+        <div><label>Screen PPI</label><input id="ppi" type="number" value="140" /></div>
+        <div><label>Strength</label><input id="cs" type="number" step="0.05" value="1.0" /></div>
+        <div><label>Headroom</label><input id="dr" type="number" step="0.05" value="0.55" /></div>
+      </div>
+      <div class="toggleRow"><span>Correction</span>
+        <label><input type="checkbox" id="corrOn" checked /> ON</label></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="outWrap"><canvas id="out"></canvas></div>
+    <div class="meta" id="outMeta"></div>
+    <div class="card" style="margin-top:14px">
+      <b style="font-size:14px">What you're seeing</b>
+      <div class="meta" style="margin-top:8px">
+        Move your head toward and away from the screen. As the estimated distance changes, the engine recomputes the
+        eye's blur for that distance and re-renders the correction. Farther away → the model predicts more blur → stronger
+        pre-distortion. Set your screen's real <b>PPI</b> for the distance-to-blur mapping to be meaningful.
+      </div>
+    </div>
+    <div class="disclaimer">
+      Experimental, not a medical device. Distance is estimated from iris spacing (~11.7&nbsp;mm human iris / ~63&nbsp;mm IPD),
+      good to roughly a centimetre after calibration — not a depth-sensor measurement. A native iOS app can read the TrueDepth
+      IR sensor directly (ARKit) for higher accuracy. All processing is local; nothing is uploaded.
+    </div>
+  </div>
+</main>
+
+<!-- MediaPipe FaceMesh (loaded from CDN; camera features degrade gracefully if unavailable/offline) -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" onerror="window.__noMesh=true"></script>
+<script>// VisionCorrect engine — pure JavaScript port of backend/vision_engine.
+// No dependencies, runs in the browser (and in Node for testing).
+// Mirrors: optical_model.py, psf.py, deconvolution.py, color.py, renderer.py.
+//
+// Exposed on `globalThis.VC` (browser) and via module.exports (Node).
+(function (root) {
+  "use strict";
+
+  // ---- 1D FFT (iterative radix-2, in place). sign=-1 forward, +1 inverse ----
+  function fft1d(re, im, n, sign) {
+    // bit-reversal permutation
+    for (let i = 1, j = 0; i < n; i++) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) {
+        const tr = re[i]; re[i] = re[j]; re[j] = tr;
+        const ti = im[i]; im[i] = im[j]; im[j] = ti;
+      }
+    }
+    for (let len = 2; len <= n; len <<= 1) {
+      const ang = sign * 2 * Math.PI / len;
+      const wr = Math.cos(ang), wi = Math.sin(ang);
+      for (let i = 0; i < n; i += len) {
+        let cr = 1, ci = 0;
+        for (let k = 0; k < len / 2; k++) {
+          const a = i + k, b = i + k + len / 2;
+          const xr = re[b] * cr - im[b] * ci;
+          const xi = re[b] * ci + im[b] * cr;
+          re[b] = re[a] - xr; im[b] = im[a] - xi;
+          re[a] += xr;        im[a] += xi;
+          const ncr = cr * wr - ci * wi;
+          ci = cr * wi + ci * wr; cr = ncr;
+        }
+      }
+    }
+  }
+
+  // ---- 2D FFT over W*H arrays (row-major). sign=-1 forward, +1 inverse ----
+  function fft2(re, im, W, H, sign) {
+    const rr = new Float64Array(W), ri = new Float64Array(W);
+    for (let y = 0; y < H; y++) {
+      const off = y * W;
+      for (let x = 0; x < W; x++) { rr[x] = re[off + x]; ri[x] = im[off + x]; }
+      fft1d(rr, ri, W, sign);
+      for (let x = 0; x < W; x++) { re[off + x] = rr[x]; im[off + x] = ri[x]; }
+    }
+    const cr = new Float64Array(H), ci = new Float64Array(H);
+    for (let x = 0; x < W; x++) {
+      for (let y = 0; y < H; y++) { cr[y] = re[y * W + x]; ci[y] = im[y * W + x]; }
+      fft1d(cr, ci, H, sign);
+      for (let y = 0; y < H; y++) { re[y * W + x] = cr[y]; im[y * W + x] = ci[y]; }
+    }
+    if (sign > 0) {
+      const inv = 1 / (W * H);
+      for (let i = 0; i < W * H; i++) { re[i] *= inv; im[i] *= inv; }
+    }
+  }
+
+  // ---- PSF: rotated anisotropic Gaussian, normalised (sum==1) ----
+  function generatePsf(size, sigmaX, sigmaY, angleDeg) {
+    sigmaX = Math.max(sigmaX, 1e-3); sigmaY = Math.max(sigmaY, 1e-3);
+    const c = (size - 1) / 2, th = angleDeg * Math.PI / 180;
+    const cos = Math.cos(th), sin = Math.sin(th);
+    const psf = new Float64Array(size * size);
+    let sum = 0;
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const dx = x - c, dy = y - c;
+      const xr = dx * cos + dy * sin, yr = -dx * sin + dy * cos;
+      const v = Math.exp(-0.5 * ((xr / sigmaX) ** 2 + (yr / sigmaY) ** 2));
+      psf[y * size + x] = v; sum += v;
+    }
+    for (let i = 0; i < psf.length; i++) psf[i] /= sum;
+    return psf;
+  }
+
+  function kernelSizeForSigma(sigma) {
+    let s = Math.ceil(sigma * 6) | 1; return Math.max(s, 3);
+  }
+
+  const nextPow2 = n => { let p = 1; while (p < n) p <<= 1; return p; };
+
+  // Embed a (possibly larger-than-image) PSF into WxH with its centre at origin.
+  function psfToPadded(psf, ksize, W, H) {
+    // center-crop if larger than image, then renormalise
+    let src = psf, ph = ksize, pw = ksize;
+    if (ksize > H || ksize > W) {
+      const nh = Math.min(ksize, H), nw = Math.min(ksize, W);
+      const ch = ksize >> 1, cw = ksize >> 1, h2 = nh >> 1, w2 = nw >> 1;
+      const cropped = new Float64Array(nh * nw); let s = 0;
+      for (let y = 0; y < nh; y++) for (let x = 0; x < nw; x++) {
+        const v = psf[(ch - h2 + y) * ksize + (cw - w2 + x)];
+        cropped[y * nw + x] = v; s += v;
+      }
+      for (let i = 0; i < cropped.length; i++) cropped[i] /= s;
+      src = cropped; ph = nh; pw = nw;
+    }
+    const re = new Float64Array(W * H);
+    const shy = ph >> 1, shx = pw >> 1;
+    for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++) {
+      const ty = ((y - shy) % H + H) % H, tx = ((x - shx) % W + W) % W;
+      re[ty * W + tx] = src[y * pw + x];
+    }
+    return re;
+  }
+
+  // Regularised (Wiener) inverse filter of a single 2-D channel.
+  // img: Float64Array length W*H (linear light). Returns Float64Array (may exceed [0,1]).
+  function wienerPrecompensate(img, W, H, psf, ksize, K) {
+    K = Math.max(K, 1e-8);
+    const hre = psfToPadded(psf, ksize, W, H), him = new Float64Array(W * H);
+    fft2(hre, him, W, H, -1);
+    const ire = Float64Array.from(img), iim = new Float64Array(W * H);
+    fft2(ire, iim, W, H, -1);
+    const N = W * H, ore = new Float64Array(N), oim = new Float64Array(N);
+    for (let i = 0; i < N; i++) {
+      const mag = hre[i] * hre[i] + him[i] * him[i] + K;
+      const gre = hre[i] / mag, gim = -him[i] / mag;    // conj(H)/(|H|^2+K)
+      ore[i] = ire[i] * gre - iim[i] * gim;
+      oim[i] = ire[i] * gim + iim[i] * gre;
+    }
+    fft2(ore, oim, W, H, +1);
+    return ore; // real part
+  }
+
+  // Forward blur (simulate the eye). Same FFT machinery.
+  function applyPsf(img, W, H, psf, ksize) {
+    const hre = psfToPadded(psf, ksize, W, H), him = new Float64Array(W * H);
+    fft2(hre, him, W, H, -1);
+    const ire = Float64Array.from(img), iim = new Float64Array(W * H);
+    fft2(ire, iim, W, H, -1);
+    const N = W * H, ore = new Float64Array(N), oim = new Float64Array(N);
+    for (let i = 0; i < N; i++) {
+      ore[i] = ire[i] * hre[i] - iim[i] * him[i];
+      oim[i] = ire[i] * him[i] + iim[i] * hre[i];
+    }
+    fft2(ore, oim, W, H, +1);
+    return ore;
+  }
+
+  // ---- colour ----
+  const srgbToLinear = x => (x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4));
+  const linearToSrgb = x => (x <= 0.0031308 ? x * 12.92 : 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
+
+  // ---- optical model ----
+  const MM_PER_INCH = 25.4;
+  function prescriptionToBlur(p, viewingDistanceMm, ppi, opts) {
+    opts = opts || {};
+    const pupil = (opts.pupilMm || 4.0) / 1000;
+    const sigmaPerDia = opts.sigmaPerDiameter || 0.25;
+    const minSigma = opts.minSigmaPx || 0.35;
+    const strength = opts.correctionStrength == null ? 1.0 : opts.correctionStrength;
+    const pitch = MM_PER_INCH / ppi;
+    const diaPx = D => (pupil * Math.abs(D)) * viewingDistanceMm / pitch;
+    const d1 = diaPx(p.sphere), d2 = diaPx(p.sphere + p.cylinder);
+    return {
+      sigmaX: Math.max(d1 * sigmaPerDia * strength, minSigma),
+      sigmaY: Math.max(d2 * sigmaPerDia * strength, minSigma),
+      angle: p.axis,
+    };
+  }
+
+  // ---- full render pipeline on an ImageData-like {data,width,height} ----
+  // Returns a new Uint8ClampedArray (RGBA). precompensate=false => contrast-only control.
+  function render(rgba, W, H, prescription, opts) {
+    opts = opts || {};
+    const dr = opts.dynamicRange == null ? 0.55 : opts.dynamicRange;
+    const K = opts.regularization == null ? 0.012 : opts.regularization;
+    const contrastBoost = opts.contrastBoost == null ? 1.0 : opts.contrastBoost;
+    const precomp = opts.precompensate !== false;
+    const blur = prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
+      opts.ppi || 264, { correctionStrength: opts.correctionStrength });
+    const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
+    const psf = generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle);
+
+    // work at power-of-two padded size to keep the FFT radix-2
+    const PW = nextPow2(W), PH = nextPow2(H);
+    const out = new Uint8ClampedArray(rgba.length);
+    let clipped = 0;
+    const chan = new Float64Array(PW * PH);
+    for (let c = 0; c < 3; c++) {
+      // load channel into padded buffer (edge-replicate padding)
+      for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
+        const sx = Math.min(x, W - 1), sy = Math.min(y, H - 1);
+        const lin = srgbToLinear(rgba[(sy * W + sx) * 4 + c] / 255);
+        chan[y * PW + x] = 0.5 + (lin - 0.5) * dr;         // contrast reduction
+      }
+      let res;
+      if (precomp) res = wienerPrecompensate(chan, PW, PH, psf, ksize, K);
+      else res = chan;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        let v = res[y * PW + x];
+        if (v < 0 || v > 1) clipped++;
+        v = Math.min(1, Math.max(0, 0.5 + (v - 0.5) * contrastBoost));
+        out[(y * W + x) * 4 + c] = Math.round(linearToSrgb(v) * 255);
+      }
+    }
+    for (let i = 3; i < out.length; i += 4) out[i] = 255; // alpha
+    return { data: out, blur, ksize, clippedFraction: clipped / (3 * W * H) };
+  }
+
+  // Simulate what the prescribed eye perceives when looking at an RGBA image.
+  function simulateEyeView(rgba, W, H, prescription, opts) {
+    opts = opts || {};
+    const blur = prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
+      opts.ppi || 264, { correctionStrength: opts.correctionStrength });
+    const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
+    const psf = generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle);
+    const PW = nextPow2(W), PH = nextPow2(H);
+    const out = new Uint8ClampedArray(rgba.length);
+    const chan = new Float64Array(PW * PH);
+    for (let c = 0; c < 3; c++) {
+      for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
+        const sx = Math.min(x, W - 1), sy = Math.min(y, H - 1);
+        chan[y * PW + x] = srgbToLinear(rgba[(sy * W + sx) * 4 + c] / 255);
+      }
+      const res = applyPsf(chan, PW, PH, psf, ksize);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const v = Math.min(1, Math.max(0, res[y * PW + x]));
+        out[(y * W + x) * 4 + c] = Math.round(linearToSrgb(v) * 255);
+      }
+    }
+    for (let i = 3; i < out.length; i += 4) out[i] = 255;
+    return out;
+  }
+
+  const VC = {
+    fft1d, fft2, generatePsf, kernelSizeForSigma, nextPow2, psfToPadded,
+    wienerPrecompensate, applyPsf, srgbToLinear, linearToSrgb,
+    prescriptionToBlur, render, simulateEyeView,
+  };
+  root.VC = VC;
+  if (typeof module !== "undefined" && module.exports) module.exports = VC;
+})(typeof globalThis !== "undefined" ? globalThis : this);
+</script>
+<script>
+const $ = id => document.getElementById(id);
+const IPD_MM = 63;                 // mean adult inter-pupillary distance
+const FOV_DEG = 60;                // assumed webcam horizontal FOV (corrected by calibration)
+let scaleK = null;                 // distance_mm = scaleK / ipd_px  (set by FOV, refined by calibration)
+let lastIpdPx = null, lastDist = 35, renderedDist = null, source = "manual";
+
+// ---------- build the content card we correct ----------
+function contentCard() {
+  const c = document.createElement("canvas"); c.width = 420; c.height = 300;
+  const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0,0,420,300); x.fillStyle = "#000";
+  x.textAlign = "center";
+  const rows = [["E",70],["F P",46],["T O Z",32],["L P E D",24]]; let y=24;
+  rows.forEach(([t,s])=>{ x.font=`bold ${s}px Arial`; x.fillText(t,210,y+s*0.8); y+=s+14; });
+  x.textAlign="left"; x.font="18px Georgia"; x.fillText("distance-adaptive correction",26,250);
+  x.font="13px Georgia"; x.fillText("lean in and out — the blur retargets",26,274);
+  return c;
+}
+const CARD = contentCard();
+const CARD_RGBA = CARD.getContext("2d").getImageData(0,0,CARD.width,CARD.height);
+
+function rx(){ return { sphere:+$("sphere").value, cylinder:+$("cyl").value, axis:+$("axis").value }; }
+
+function renderAt(distCm){
+  const W=CARD.width, H=CARD.height;
+  const cv=$("out"); cv.width=W; cv.height=H; const ctx=cv.getContext("2d");
+  if(!$("corrOn").checked){ ctx.putImageData(CARD_RGBA,0,0); $("outMeta").textContent=`correction OFF · ${distCm.toFixed(0)} cm`; return; }
+  const opts={ viewingDistanceMm:distCm*10, ppi:+$("ppi").value, correctionStrength:+$("cs").value,
+    dynamicRange:+$("dr").value, precompensate:true };
+  const res=VC.render(CARD_RGBA.data, W, H, rx(), opts);
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(res.data),W,H),0,0);
+  $("outMeta").textContent=`${distCm.toFixed(0)} cm → blur σx=${res.blur.sigmaX.toFixed(1)}px σy=${res.blur.sigmaY.toFixed(1)}px · PSF ${res.ksize}×${res.ksize} · clipped ${(res.clippedFraction*100).toFixed(0)}%`;
+  renderedDist=distCm;
+}
+
+// Re-render only when distance moved enough (correction is expensive).
+let renderTimer=null;
+function requestRender(distCm){
+  lastDist=distCm; $("distVal").textContent=distCm.toFixed(0);
+  if(renderedDist!=null && Math.abs(distCm-renderedDist)<1.5) return;  // only re-render on real movement
+  if(renderTimer) return;
+  renderTimer=setTimeout(()=>{ renderTimer=null; renderAt(lastDist); }, 90);
+}
+
+// ---------- manual slider (works with no camera) ----------
+$("manual").addEventListener("input", e=>{ $("manVal").textContent=e.target.value;
+  if(source!=="camera"){ $("srcBadge").textContent="manual"; requestRender(+e.target.value); } });
+["sphere","cyl","axis","ppi","cs","dr"].forEach(id=>$(id).addEventListener("input",()=>{ renderedDist=null; requestRender(lastDist); }));
+$("corrOn").addEventListener("change",()=>renderAt(lastDist));
+
+// ---------- camera + face mesh ----------
+let faceMesh=null, camStream=null;
+function distanceFromIpd(px){ if(!scaleK) return null; return (scaleK/px)/10; } // cm
+
+$("calibrate").addEventListener("click", ()=>{
+  if(lastIpdPx==null){ $("status").textContent="No face detected yet — face the camera."; return; }
+  const knownMm=(+$("calibCm").value)*10; scaleK = knownMm * lastIpdPx;   // distance_mm = scaleK/ipd_px
+  $("status").textContent=`Calibrated at ${$("calibCm").value} cm.`;
+});
+
+function onResults(res){
+  const ov=$("overlay"), v=$("video");
+  ov.width=v.videoWidth||640; ov.height=v.videoHeight||480; const ctx=ov.getContext("2d");
+  ctx.clearRect(0,0,ov.width,ov.height);
+  const lm = res.multiFaceLandmarks && res.multiFaceLandmarks[0];
+  if(!lm || lm.length<478){ $("status").textContent="Looking for your face…"; return; }
+  // iris centres: 468 (one eye), 473 (other) — provided when refineLandmarks is on
+  const a=lm[468], b=lm[473];
+  const ax=a.x*ov.width, ay=a.y*ov.height, bx=b.x*ov.width, by=b.y*ov.height;
+  const ipdPx=Math.hypot(ax-bx, ay-by); lastIpdPx=ipdPx;
+  ctx.fillStyle="#5b9dff"; [[ax,ay],[bx,by]].forEach(([px,py])=>{ ctx.beginPath(); ctx.arc(px,py,4,0,7); ctx.fill(); });
+  ctx.strokeStyle="#5b9dff"; ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+  if(!scaleK){ // default scale from assumed FOV
+    const focalPx=(ov.width/2)/Math.tan(FOV_DEG/2*Math.PI/180); scaleK=focalPx*IPD_MM;
+  }
+  const cm=distanceFromIpd(ipdPx);
+  source="camera"; $("srcBadge").textContent="camera"; $("calibrate").disabled=false;
+  $("status").textContent="Tracking. Calibrate for accurate absolute distance.";
+  if(cm) requestRender(cm);
+}
+
+$("startCam").addEventListener("click", async ()=>{
+  if(window.__noMesh || typeof FaceMesh==="undefined"){
+    $("status").textContent="Face-mesh library unavailable (offline?). Use the manual slider — the correction still adapts.";
+    return;
+  }
+  try{
+    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user", width:640, height:480}, audio:false});
+    $("video").srcObject=camStream; await $("video").play();
+    faceMesh=new FaceMesh({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`});
+    faceMesh.setOptions({maxNumFaces:1, refineLandmarks:true, minDetectionConfidence:.5, minTrackingConfidence:.5});
+    faceMesh.onResults(onResults);
+    $("status").textContent="Camera on. Detecting…";
+    const pump=async()=>{ if($("video").readyState>=2){ try{ await faceMesh.send({image:$("video")}); }catch(e){} } requestAnimationFrame(pump); };
+    pump();
+  }catch(e){ $("status").textContent="Camera error: "+e.message+" — use the manual slider instead."; }
+});
+
+renderAt(35);
+</script>
+</body>
+</html>

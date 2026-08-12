@@ -22,6 +22,19 @@ Two tabs:
   (A original · B contrast-only control · C full correction). Scores % correct,
   logs reaction time, exports CSV + JSON. Meaningful result: **C − B**.
 
+### `distance.html` — distance-adaptive (front camera)
+
+The front camera estimates how far your face is (from iris spacing) and the
+correction re-renders live as you lean in/out. A manual slider works with no
+camera. **Serve it over localhost/https** (not `file://`) so the browser grants
+camera access:
+
+```bash
+python -m http.server 8080   # then open http://localhost:8080/distance.html
+```
+
+Details and the native-iOS/TrueDepth alternative: `../docs/distance-adaptation.md`.
+
 ## What's inside
 
 | File | Role |
