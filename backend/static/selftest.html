@@ -58,6 +58,7 @@
 
     <label>Content</label>
     <select id="content">
+      <option value="threshold">Acuity threshold (auto-sized to your blur)</option>
       <option value="chart">Eye chart (shrinking)</option>
       <option value="text">Reading text</option>
       <option value="grating">Line patterns</option>
@@ -416,9 +417,28 @@ const $ = id => document.getElementById(id);
 const SIZE = 512; // content is rendered 1:1 at this size (blur is in real screen pixels)
 
 // ---- content builders (512x512, or 512xH for text) ----
-function build(kind){
+function build(kind, sigma){
   const c=document.createElement('canvas'); c.width=SIZE; c.height=kind==='text'?384:SIZE;
   const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,c.width,c.height); x.fillStyle='#000';
+  if(kind==='threshold'){
+    // Rows auto-sized around the eye's real blur: the middle row's stroke ≈ the
+    // blur radius, i.e. right at the resolution threshold — where ON helps most.
+    const SL='CDHKNORSVZ';
+    const base=Math.max(13, Math.min(150, (sigma||3)*9));   // ~threshold font size
+    const rows=[{m:2.0},{m:1.4},{m:1.0,mark:true},{m:0.72},{m:0.52}];
+    x.textAlign='center'; let y=26;
+    rows.forEach(r=>{
+      const fs=Math.max(9, Math.round(base*r.m));
+      let s=''; for(let k=0;k<5;k++) s+=SL[Math.floor(Math.random()*SL.length)]+' ';
+      x.font=`bold ${fs}px Arial`; x.fillText(s.trim(), SIZE/2, y+fs*0.78);
+      x.save(); x.textAlign='left'; x.font='11px Arial';
+      x.fillStyle=r.mark?'#2a63b8':'#999';
+      x.fillText(r.mark?`${fs}px ◄ threshold`:`${fs}px`, 8, y+fs*0.55);
+      x.restore(); x.textAlign='center';
+      y+=fs+16;
+    });
+    return c;
+  }
   if(kind==='text'){
     const lines=['The quick brown fox jumps over','the lazy dog. 1234567890.',
       'Pre-compensation trades a little','contrast for a lot of sharpness.',
@@ -461,13 +481,20 @@ function recompute(){
   $('spin').style.display='block';
   timer=setTimeout(()=>{
     const kind=$('content').value;
-    const src=(kind==='upload'&&uploaded)?uploaded:build(kind);
+    // For the threshold chart, size the rows to the eye's REAL blur (strength 1.0).
+    let sigma=3;
+    if(kind==='threshold'){ const bl=VC.prescriptionToBlur(rx(), (+$('dist').value)*10, +$('ppi').value, {correctionStrength:1.0});
+      sigma=(bl.sigmaX+bl.sigmaY)/2; }
+    const src=(kind==='upload'&&uploaded)?uploaded:build(kind, sigma);
     const W=src.width,H=src.height; const orig=src.getContext('2d').getImageData(0,0,W,H);
     const res=VC.render(orig.data,W,H,rx(),opts());
     cache={ orig, corr:new ImageData(new Uint8ClampedArray(res.data),W,H), W, H };
     const r=rx();
     $('blurMeta').innerHTML=`applied Rx ${r.sphere.toFixed(2)} / ${r.cylinder.toFixed(2)} × ${Math.round(r.axis)}°<br>`+
       `blur σx=${res.blur.sigmaX.toFixed(1)}px σy=${res.blur.sigmaY.toFixed(1)}px @${res.blur.angle}° · PSF ${res.ksize}×${res.ksize} · clipped ${(res.clippedFraction*100).toFixed(0)}%`;
+    $('hint').textContent = kind==='threshold'
+      ? 'Rows are auto-sized to your blur. Flip ON/OFF (spacebar) and watch the ◄ threshold row and the two smaller rows below it — that is where correction should help most.'
+      : 'Flip ON/OFF and compare. Look for the smaller letters becoming readable. The corrected image is greyer — that contrast trade is expected.';
     $('spin').style.display='none';
     redraw();
   }, 220);
