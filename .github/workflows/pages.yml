@@ -39,6 +39,7 @@ jobs:
           cp standalone/visioncorrect.html _site/
           cp standalone/distance.html _site/
           cp standalone/lab.html _site/
+          cp standalone/dial.html _site/
 
       - uses: actions/configure-pages@v5
         with:

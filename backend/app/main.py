@@ -68,5 +68,11 @@ async def lab() -> FileResponse:
     return FileResponse(os.path.join(_STATIC_DIR, "lab.html"))
 
 
+@app.get("/dial", include_in_schema=False)
+async def dial() -> FileResponse:
+    """One-slider subjective refraction: dial correction until the image is clear."""
+    return FileResponse(os.path.join(_STATIC_DIR, "dial.html"))
+
+
 if os.path.isdir(_STATIC_DIR):
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")

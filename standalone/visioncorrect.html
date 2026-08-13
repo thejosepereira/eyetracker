@@ -381,7 +381,9 @@
     const K = opts.regularization == null ? 0.012 : opts.regularization;
     const contrastBoost = opts.contrastBoost == null ? 1.0 : opts.contrastBoost;
     const precomp = opts.precompensate !== false;
-    const blur = prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
+    // opts.overrideBlur = {sigmaX, sigmaY, angle} bypasses the prescription->blur
+    // step (used by the "dial to clear" page, which sweeps blur directly).
+    const blur = opts.overrideBlur || prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
       opts.ppi || 264, { correctionStrength: opts.correctionStrength,
                          pupilMm: opts.pupilMm, sigmaPerDiameter: opts.sigmaPerDiameter });
     const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));

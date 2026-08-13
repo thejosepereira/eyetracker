@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VisionCorrect — Dial to Clear</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1115; --card:#181b22; --line:#2a2f3a;
+          --fg:#e8eaed; --muted:#9aa0ab; --accent:#5b9dff; --good:#37d67a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); }
+  h1 { margin:0; font-size:18px; } .sub { color:var(--muted); font-size:13px; margin-top:3px; }
+  main { max-width:760px; margin:0 auto; padding:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .setup { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+  .setup > div { flex:1; min-width:120px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:0 0 4px; }
+  input,select { width:100%; background:#232838; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:8px; font-size:14px; }
+  button.ghost { background:#232838; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:9px 12px; cursor:pointer; font-weight:600; }
+  .stage { text-align:center; }
+  #img { width:100%; max-width:520px; background:#fff; border-radius:8px; box-shadow:0 6px 24px rgba(0,0,0,.4); image-rendering:auto; }
+  .dialWrap { margin-top:18px; }
+  .dialVal { font-size:40px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .dialUnit { color:var(--muted); font-size:16px; }
+  input[type=range]#dial { height:38px; }
+  input[type=range]#dial::-webkit-slider-thumb { }
+  .progress { height:8px; background:#232838; border-radius:4px; overflow:hidden; margin-top:8px; }
+  .progress > div { height:100%; background:var(--accent); width:0; transition:width .1s; }
+  .hint { color:var(--muted); font-size:13px; line-height:1.5; margin-top:12px; }
+  .estimate { background:#12331f; border:1px solid #1f6b3a; color:#a9f0c6; border-radius:8px; padding:10px 12px; margin-top:12px; font-size:14px; display:none; }
+  .row2 { display:flex; gap:10px; margin-top:12px; }
+  .disclaimer { color:var(--muted); font-size:11px; margin-top:16px; line-height:1.5; border-top:1px dashed var(--line); padding-top:12px; }
+  /* calibration overlay */
+  .calOverlay { position:fixed; inset:0; background:rgba(0,0,0,.75); display:none; align-items:center; justify-content:center; z-index:50; padding:20px; }
+  .calSheet { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px; max-width:520px; width:100%; }
+  .calBox { background:linear-gradient(135deg,#2a63b8,#5b9dff); border:2px solid #fff; border-radius:10px; margin:0 auto; }
+  .val { float:right; color:var(--fg); }
+</style>
+</head>
+<body>
+<header>
+  <h1>VisionCorrect — Dial to Clear</h1>
+  <div class="sub">Glasses off, one eye, held at the set distance. Slide the dial until the letters look sharpest — that number is roughly your correction.</div>
+</header>
+
+<main>
+  <div class="card">
+    <div class="setup">
+      <div><label>Which eye?</label><select id="eye"><option value="right">Right (cover left)</option><option value="left">Left (cover right)</option></select></div>
+      <div><label>Distance (cm)</label><input id="dist" type="number" value="45" /></div>
+      <div><label>Screen PPI</label><input id="ppi" type="number" value="140" /></div>
+      <div style="flex:0 0 auto"><button class="ghost" id="calBtn">📏 Calibrate</button></div>
+    </div>
+    <div class="row2">
+      <div style="flex:1"><label>What to read</label><select id="content"><option value="chart">Eye chart</option><option value="text">Text</option></select></div>
+      <div style="flex:0 0 auto; align-self:flex-end"><button class="ghost" id="rebuild">Apply setup</button></div>
+    </div>
+    <div class="progress" id="prog" style="display:none"><div id="progBar"></div></div>
+    <div class="hint" id="setupHint"></div>
+  </div>
+
+  <div class="card stage">
+    <img id="img" alt="" />
+    <div class="dialWrap">
+      <div><span class="dialVal" id="dialVal">0.00</span> <span class="dialUnit">D correction</span></div>
+      <input id="dial" type="range" min="0" max="32" step="1" value="0" />
+      <div class="hint">← less correction (start) &nbsp;·&nbsp; more correction →</div>
+      <button class="ghost" id="lockBtn" style="margin-top:12px">✓ This looks clearest — lock it in</button>
+      <div class="estimate" id="estimate"></div>
+    </div>
+    <div class="disclaimer">
+      Experimental, not a medical device or an eye exam. This estimates spherical blur only (not astigmatism) and is
+      not a substitute for a real refraction by an eye-care professional. On a flat screen the sharpest point may be
+      subtle for strong prescriptions.
+    </div>
+  </div>
+</main>
+
+<div id="calOverlay" class="calOverlay">
+  <div class="calSheet">
+    <h3 style="margin:0 0 8px">Calibrate your screen</h3>
+    <p class="hint" style="margin:0 0 14px">Hold a credit/ID card flat on the screen and drag until the outline matches its width exactly.</p>
+    <div id="calBox" class="calBox"></div>
+    <label style="margin-top:16px">Match width <span class="val" id="calPpi"></span></label>
+    <input id="calRange" type="range" min="140" max="760" value="300" />
+    <div style="display:flex; gap:10px; margin-top:16px; justify-content:flex-end;">
+      <button class="ghost" id="calCancel">Cancel</button>
+      <button class="ghost" id="calUse" style="background:var(--accent); color:#031024; border:0; font-weight:700">Use this PPI</button>
+    </div>
+  </div>
+</div>
+
+<script>/*__ENGINE__*/</script>
+<script>
+const $ = id => document.getElementById(id);
+const SIZE = 320;
+const D_MAX = 8, D_STEP = 0.25;                 // dial sweeps 0..8 D in 0.25 steps
+const LEVELS = Math.round(D_MAX / D_STEP) + 1;  // 33
+const PUPIL_MM = 4.0, SIGMA_PER_DIA = 0.25, MM_PER_INCH = 25.4;
+
+// Blur sigma (px) for a given spherical defocus D at this distance/PPI. This is
+// the "direct" blur the dial sweeps — the eye sees sharpest when D matches its
+// own defocus and the pre-distortion cancels it.
+function sigmaForD(D, distMm, ppi){
+  const pitch = MM_PER_INCH / ppi;
+  const beta = (PUPIL_MM/1000) * D;             // rad
+  const diaPx = beta * distMm / pitch;
+  return Math.max(diaPx * SIGMA_PER_DIA, 0.35);
+}
+
+function content(kind){
+  const c=document.createElement('canvas'); c.width=SIZE; c.height=SIZE;
+  const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,SIZE,SIZE); x.fillStyle='#000';
+  if(kind==='text'){ const L=['The quick brown fox','jumps over the lazy dog','1234567890','smaller line to read','and tinier still here']; let y=44,s=34; x.textAlign='left';
+    L.forEach(t=>{ x.font=`${s}px Georgia`; x.fillText(t,16,y); y+=s+10; s=Math.max(13,s-5); }); }
+  else { x.textAlign='center'; const rows=[['E',84],['F P',54],['T O Z',38],['L P E D',28],['C F D P T',20]]; let y=18;
+    rows.forEach(([t,s])=>{ x.font=`bold ${s}px Arial`; x.fillText(t,SIZE/2,y+s*0.82); y+=s+14; }); }
+  return c;
+}
+
+let stack=[];          // pre-rendered ImageData per dial level
+let baseRGBA=null;
+
+function precompute(){
+  const distMm=(+$('dist').value)*10, ppi=+$('ppi').value;
+  const src=content($('content').value); baseRGBA=src.getContext('2d').getImageData(0,0,SIZE,SIZE);
+  stack=new Array(LEVELS); $('prog').style.display='block'; $('setupHint').textContent='Preparing the dial…';
+  $('dial').disabled=true;
+  let i=0;
+  function step(){
+    const D=i*D_STEP; const sig=sigmaForD(D, distMm, ppi);
+    if(D===0){ stack[i]=baseRGBA; }               // 0 D = original, untouched
+    else { const res=VC.render(baseRGBA.data, SIZE, SIZE, {sphere:0,cylinder:0,axis:0},
+             { overrideBlur:{sigmaX:sig, sigmaY:sig, angle:0}, dynamicRange:0.55, regularization:0.012, precompensate:true });
+      stack[i]=new ImageData(new Uint8ClampedArray(res.data), SIZE, SIZE); }
+    i++; $('progBar').style.width=(i/LEVELS*100)+'%';
+    if(i<LEVELS){ setTimeout(step,0); }
+    else { $('prog').style.display='none'; $('setupHint').textContent=''; $('dial').disabled=false; show(+$('dial').value); }
+  }
+  step();
+}
+
+const cv=document.createElement('canvas'); cv.width=SIZE; cv.height=SIZE; const cctx=cv.getContext('2d');
+function show(idx){ const img=stack[idx]; if(!img) return; cctx.putImageData(img,0,0); $('img').src=cv.toDataURL();
+  $('dialVal').textContent=(idx*D_STEP).toFixed(2); }
+
+$('dial').addEventListener('input',()=>show(+$('dial').value));
+$('rebuild').addEventListener('click',precompute);
+['dist','ppi','content'].forEach(id=>$(id).addEventListener('change',precompute));
+
+$('lockBtn').addEventListener('click',()=>{ const D=(+$('dial').value)*D_STEP; const eye=$('eye').value;
+  $('estimate').style.display='block';
+  $('estimate').innerHTML = D<0.25
+    ? 'Sharpest at <b>0 D</b> — this eye needs little/no correction at this distance (or the effect is too subtle to see on a flat screen).'
+    : `Sharpest at <b>${D.toFixed(2)} D</b>. That's this eye's approximate <b>spherical</b> correction at ${$('dist').value} cm (myopia ≈ −${D.toFixed(2)}). Note the value and tell me — I'll compare it to their real prescription to calibrate the model.`; });
+
+// ---- calibration overlay ----
+const CARD_MM=85.6;
+function calUpdate(){ const w=+$('calRange').value; $('calBox').style.width=w+'px'; $('calBox').style.height=(w*53.98/CARD_MM)+'px'; $('calPpi').textContent='≈ '+Math.round(w*25.4/CARD_MM)+' PPI'; }
+$('calBtn').addEventListener('click',()=>{ $('calOverlay').style.display='flex'; $('calRange').value=Math.round((+$('ppi').value)*CARD_MM/25.4); calUpdate(); });
+$('calRange').addEventListener('input',calUpdate);
+$('calCancel').addEventListener('click',()=>$('calOverlay').style.display='none');
+$('calUse').addEventListener('click',()=>{ $('ppi').value=Math.round((+$('calRange').value)*25.4/CARD_MM); $('calOverlay').style.display='none'; precompute(); });
+
+precompute();
+</script>
+</body>
+</html>
