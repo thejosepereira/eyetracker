@@ -323,19 +323,21 @@
   const MM_PER_INCH = 25.4;
   function prescriptionToBlur(p, viewingDistanceMm, ppi, opts) {
     opts = opts || {};
-    const pupil = (opts.pupilMm || 4.0) / 1000;
+    const pupilMm = opts.pupilMm || 3.5;           // photopic indoor screen default
+    const pupil = pupilMm / 1000;
     const sigmaPerDia = opts.sigmaPerDiameter || 0.25;
     const minSigma = opts.minSigmaPx || 0.35;
     const strength = opts.correctionStrength == null ? 1.0 : opts.correctionStrength;
+    const age = opts.ageYears == null ? 35 : opts.ageYears;
+    const aMax = Math.max(0, 15 - 0.25 * age);     // accommodation amplitude (Hofstetter)
+    const dofHalf = 1.0 / pupilMm;                  // depth-of-focus half-band (D)
     const pitch = MM_PER_INCH / ppi;
-    // Far-point model: a relaxed myopic eye of power S (negative) is sharp at its
-    // far point (= -1/S) and blurs only BEYOND it; accommodation keeps nearer
-    // objects sharp. defocus = max(0, -S - 1/d). So a -2.5 D eye is sharp at
-    // ~40 cm, blurred farther away, and the blur is bounded (not growing forever
-    // with distance). An emmetrope (S=0) gets ~0 at normal distances.
-    const d_m = Math.max(viewingDistanceMm / 1000, 1e-3);
-    const defocus = D => Math.max(0, -D - 1 / d_m);
-    const diaPx = D => (pupil * defocus(D)) * viewingDistanceMm / pitch;
+    const dm = Math.max(viewingDistanceMm / 1000, 1e-3);
+    // Accommodation-aware residual defocus per meridian (signed power R). Blur
+    // appears beyond the far point AND nearer than the near point; sub-DoF defocus
+    // is not perceived. Sharp at the far point; handles hyperopia & presbyopia.
+    const defocus = R => { const v = 1 / dm + R; return Math.max(0, Math.max(-v, v - aMax) - dofHalf); };
+    const diaPx = R => (pupil * defocus(R)) * viewingDistanceMm / pitch;
     const d1 = diaPx(p.sphere), d2 = diaPx(p.sphere + p.cylinder);
     return {
       sigmaX: Math.max(d1 * sigmaPerDia * strength, minSigma),
@@ -384,7 +386,7 @@
     // opts.overrideBlur = {sigmaX, sigmaY, angle} bypasses the prescription->blur
     // step (used by the "dial to clear" page, which sweeps blur directly).
     const blur = opts.overrideBlur || prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
-      opts.ppi || 264, { correctionStrength: opts.correctionStrength,
+      opts.ppi || 264, { correctionStrength: opts.correctionStrength, ageYears: opts.ageYears,
                          pupilMm: opts.pupilMm, sigmaPerDiameter: opts.sigmaPerDiameter });
     const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
     const psf = generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle);
@@ -419,7 +421,7 @@
   function simulateEyeView(rgba, W, H, prescription, opts) {
     opts = opts || {};
     const blur = prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
-      opts.ppi || 264, { correctionStrength: opts.correctionStrength,
+      opts.ppi || 264, { correctionStrength: opts.correctionStrength, ageYears: opts.ageYears,
                          pupilMm: opts.pupilMm, sigmaPerDiameter: opts.sigmaPerDiameter });
     const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
     const psf = generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle);

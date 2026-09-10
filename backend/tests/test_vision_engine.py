@@ -85,10 +85,35 @@ def test_far_point_model_sharp_at_far_point():
 
 
 def test_emmetrope_has_no_modelled_blur():
-    # Zero prescription -> no residual defocus at a normal screen distance.
+    # Zero prescription -> no residual defocus at a normal screen distance (young).
     model = OpticalModel()
-    b = model.prescription_to_blur(EyePrescription(0, 0, 0), 400, DisplayParams(264.0))
+    b = model.prescription_to_blur(EyePrescription(0, 0, 0), 400, DisplayParams(264.0),
+                                   age_years=25)
     assert b.sigma_x <= model.min_sigma_px + 1e-6
+
+
+def test_presbyope_blurs_at_near_but_young_does_not():
+    # Age 60 (no accommodation) can't focus a near screen; age 20 can.
+    model = OpticalModel()
+    d = DisplayParams(264.0)
+    young = model.prescription_to_blur(EyePrescription(0, 0, 0), 350, d, age_years=20)
+    old = model.prescription_to_blur(EyePrescription(0, 0, 0), 350, d, age_years=60)
+    assert young.sigma_x <= model.min_sigma_px + 1e-6
+    assert old.sigma_x > young.sigma_x
+
+
+def test_hyperope_blurs_when_accommodation_insufficient():
+    # +2 D hyperope with little accommodation (age 55) blurs; the old model
+    # wrongly returned zero blur for any positive sphere.
+    model = OpticalModel()
+    b = model.prescription_to_blur(EyePrescription(2.0, 0, 0), 500, DisplayParams(264.0),
+                                   age_years=55)
+    assert b.sigma_x > model.min_sigma_px
+
+
+def test_accommodation_amplitude_decreases_with_age():
+    assert OpticalModel.accommodation_amplitude(20) > OpticalModel.accommodation_amplitude(50)
+    assert OpticalModel.accommodation_amplitude(70) == 0.0
 
 
 def test_astigmatism_makes_blur_anisotropic():

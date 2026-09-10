@@ -22,7 +22,12 @@ the research improves.
 
 ## The approximation we use (v0.1)
 
-### 1. Defocus → angular blur (far-point model)
+> **Updated after a literature review** (see [`research-findings.md`](research-findings.md)):
+> the model is now accommodation-aware (handles myopia, hyperopia, and presbyopia),
+> subtracts a depth-of-focus dead-band, and defaults to a 3.5 mm pupil. The
+> far-point description below is the myopia special case of that model.
+
+### 1. Defocus → angular blur (far-point / accommodation model)
 
 The **residual defocus** actually experienced depends on distance. A relaxed
 myopic eye of power `S` (negative) is in focus at its **far point** (distance

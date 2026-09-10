@@ -78,7 +78,7 @@ class OpticalModel:
 
     def __init__(
         self,
-        pupil_diameter_mm: float = 4.0,
+        pupil_diameter_mm: float = 3.5,
         # Gaussian sigma as a fraction of the geometric blur-circle diameter.
         # A uniform disk of diameter d has an equivalent Gaussian sigma ~ d/4.
         sigma_per_diameter: float = 0.25,
@@ -89,28 +89,44 @@ class OpticalModel:
         self.min_sigma_px = min_sigma_px
 
     @staticmethod
-    def _residual_defocus(power_diopters: float, viewing_distance_mm: float) -> float:
-        """Residual defocus (dioptres) actually experienced at this distance.
+    def accommodation_amplitude(age_years: float) -> float:
+        """Remaining accommodation (dioptres) by age — Hofstetter, conservative bound.
 
-        Far-point model: a relaxed myopic eye of power `S` (negative) is in focus
-        at its far point (distance = -1/S) and blurs only for objects BEYOND it.
-        Accommodation keeps nearer objects sharp, so
+        A_max ≈ 15 - 0.25·age; ~0 by age 60 (presbyopia). Hofstetter is known to
+        overestimate true lens accommodation by ~1-2 D, so the minimum-amplitude
+        form is used deliberately.
+        """
+        return max(0.0, 15.0 - 0.25 * age_years)
 
-            defocus = max(0, -S - 1/distance_m)
+    @staticmethod
+    def _residual_defocus(
+        power_diopters: float, viewing_distance_mm: float,
+        a_max: float, dof_half: float,
+    ) -> float:
+        """Residual defocus (dioptres) actually experienced along one meridian.
 
-        This makes a -2.5 D eye sharp at ~40 cm (its far point), blurred farther
-        away, and bounds the blur instead of growing without limit with distance.
-        An emmetrope (S=0) gets 0 at all distances it can accommodate to.
+        With signed refractive error `R` (the correcting-lens power; myope < 0) and
+        demand vergence `V = 1/d`, an eye can supply accommodation in [0, A_max] but
+        cannot relax past its far point. So blur appears both for objects BEYOND the
+        far point and NEARER than the near point:
+
+            residual = max(0, -(V + R), (V + R) - A_max)
+
+        Then a depth-of-focus dead-band is subtracted: defocus below DoF_half is not
+        perceived (and must not be "corrected", or we only add artifacts).
         """
         d_m = max(viewing_distance_mm / 1000.0, 1e-3)
-        return max(0.0, -power_diopters - 1.0 / d_m)
+        v = 1.0 / d_m + power_diopters
+        residual = max(0.0, -v, v - a_max)
+        return max(0.0, residual - dof_half)
 
     def _meridian_blur_diameter_px(
-        self, power_diopters: float, viewing_distance_mm: float, display: DisplayParams
+        self, power_diopters: float, viewing_distance_mm: float, display: DisplayParams,
+        a_max: float, dof_half: float,
     ) -> float:
         """Geometric blur-circle diameter on screen, in pixels, for one meridian."""
         pupil_m = self.pupil_diameter_mm / 1000.0
-        defocus = self._residual_defocus(power_diopters, viewing_distance_mm)
+        defocus = self._residual_defocus(power_diopters, viewing_distance_mm, a_max, dof_half)
         beta_rad = pupil_m * defocus                       # blur angle (radians)
         blur_diameter_mm = beta_rad * viewing_distance_mm  # small-angle projection
         return blur_diameter_mm / display.pixel_pitch_mm
@@ -121,15 +137,19 @@ class OpticalModel:
         viewing_distance_mm: float,
         display: DisplayParams,
         correction_strength: float = 1.0,
+        age_years: float = 35.0,
     ) -> BlurParams:
         prescription.validate()
+
+        a_max = self.accommodation_amplitude(age_years)
+        dof_half = 1.0 / self.pupil_diameter_mm   # depth-of-focus half-band (D)
 
         # Dioptric power along the two principal meridians.
         power_axis = prescription.sphere
         power_perp = prescription.sphere + prescription.cylinder
 
-        d1 = self._meridian_blur_diameter_px(power_axis, viewing_distance_mm, display)
-        d2 = self._meridian_blur_diameter_px(power_perp, viewing_distance_mm, display)
+        d1 = self._meridian_blur_diameter_px(power_axis, viewing_distance_mm, display, a_max, dof_half)
+        d2 = self._meridian_blur_diameter_px(power_perp, viewing_distance_mm, display, a_max, dof_half)
 
         sigma1 = max(d1 * self.sigma_per_diameter * correction_strength, self.min_sigma_px)
         sigma2 = max(d2 * self.sigma_per_diameter * correction_strength, self.min_sigma_px)

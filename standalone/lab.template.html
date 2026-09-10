@@ -55,8 +55,10 @@
     <input id="dist" type="range" min="15" max="100" value="50" />
     <label>Screen PPI <span class="val" id="ppiV">140</span></label>
     <input id="ppi" type="range" min="80" max="640" value="140" />
-    <label>Pupil diameter <span class="val" id="pupV">4.0</span> mm</label>
-    <input id="pup" type="range" min="2" max="7" step="0.1" value="4.0" />
+    <label>Pupil diameter <span class="val" id="pupV">3.5</span> mm</label>
+    <input id="pup" type="range" min="2" max="7" step="0.1" value="3.5" />
+    <label>Age <span class="val" id="ageV">35</span> yr <span style="color:var(--muted)">(accommodation)</span></label>
+    <input id="age" type="range" min="8" max="80" step="1" value="35" />
 
     <div class="sectionH">Correction tuning</div>
     <label>Correction strength <span class="val" id="csV">1.00</span></label>
@@ -118,7 +120,7 @@ function build(kind){
 
 function rx(){ return { sphere:+$('sph').value, cylinder:+$('cyl').value, axis:+$('axis').value }; }
 function opts(){ return { viewingDistanceMm:(+$('dist').value)*10, ppi:+$('ppi').value, pupilMm:+$('pup').value,
-  correctionStrength:+$('cs').value, dynamicRange:+$('dr').value, regularization:+$('reg').value, precompensate:true }; }
+  correctionStrength:+$('cs').value, ageYears:+$('age').value, dynamicRange:+$('dr').value, regularization:+$('reg').value, precompensate:true }; }
 
 // contrast-normalised sharpness (gradient energy after percentile stretch)
 function score(rgba){
@@ -131,7 +133,7 @@ function score(rgba){
 function draw(id,rgba){ const cv=$(id); cv.width=SIZE; cv.height=SIZE; cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba),SIZE,SIZE),0,0); }
 
 function syncLabels(){ $('distV').textContent=$('dist').value; $('ppiV').textContent=$('ppi').value;
-  $('pupV').textContent=(+$('pup').value).toFixed(1); $('csV').textContent=(+$('cs').value).toFixed(2);
+  $('pupV').textContent=(+$('pup').value).toFixed(1); $('ageV').textContent=$('age').value; $('csV').textContent=(+$('cs').value).toFixed(2);
   $('drV').textContent=(+$('dr').value).toFixed(2); $('regV').textContent=(+$('reg').value).toFixed(3); }
 
 let timer=null;
@@ -157,7 +159,7 @@ function recompute(){
   }, 200);
 }
 
-['sph','cyl','axis','dist','ppi','pup','cs','dr','reg','content'].forEach(id=>$(id).addEventListener('input',recompute));
+['sph','cyl','axis','dist','ppi','pup','age','cs','dr','reg','content'].forEach(id=>$(id).addEventListener('input',recompute));
 $('reset').addEventListener('click',()=>{ $('cs').value='1.0'; $('dr').value='0.55'; $('reg').value='0.012'; recompute(); });
 syncLabels(); recompute();
 </script>

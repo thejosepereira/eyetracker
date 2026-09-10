@@ -103,6 +103,8 @@
     <label style="margin-top:14px">Screen PPI <span class="val" id="ppiV">140</span></label>
     <input id="ppi" type="range" min="80" max="640" value="140" />
     <button class="ghost" id="calBtn" style="width:100%; margin-top:8px">📏 Calibrate with a credit card</button>
+    <label style="margin-top:14px">Age <span class="val" id="ageV">35</span> yr <span style="color:var(--muted)">(accommodation)</span></label>
+    <input id="age" type="range" min="8" max="80" step="1" value="35" />
     <div class="eyeHead" style="margin-top:16px">Fine-tuning
       <span style="font-weight:400; color:var(--muted)">— start at the defaults; only tweak if needed</span></div>
 
@@ -296,19 +298,21 @@
   const MM_PER_INCH = 25.4;
   function prescriptionToBlur(p, viewingDistanceMm, ppi, opts) {
     opts = opts || {};
-    const pupil = (opts.pupilMm || 4.0) / 1000;
+    const pupilMm = opts.pupilMm || 3.5;           // photopic indoor screen default
+    const pupil = pupilMm / 1000;
     const sigmaPerDia = opts.sigmaPerDiameter || 0.25;
     const minSigma = opts.minSigmaPx || 0.35;
     const strength = opts.correctionStrength == null ? 1.0 : opts.correctionStrength;
+    const age = opts.ageYears == null ? 35 : opts.ageYears;
+    const aMax = Math.max(0, 15 - 0.25 * age);     // accommodation amplitude (Hofstetter)
+    const dofHalf = 1.0 / pupilMm;                  // depth-of-focus half-band (D)
     const pitch = MM_PER_INCH / ppi;
-    // Far-point model: a relaxed myopic eye of power S (negative) is sharp at its
-    // far point (= -1/S) and blurs only BEYOND it; accommodation keeps nearer
-    // objects sharp. defocus = max(0, -S - 1/d). So a -2.5 D eye is sharp at
-    // ~40 cm, blurred farther away, and the blur is bounded (not growing forever
-    // with distance). An emmetrope (S=0) gets ~0 at normal distances.
-    const d_m = Math.max(viewingDistanceMm / 1000, 1e-3);
-    const defocus = D => Math.max(0, -D - 1 / d_m);
-    const diaPx = D => (pupil * defocus(D)) * viewingDistanceMm / pitch;
+    const dm = Math.max(viewingDistanceMm / 1000, 1e-3);
+    // Accommodation-aware residual defocus per meridian (signed power R). Blur
+    // appears beyond the far point AND nearer than the near point; sub-DoF defocus
+    // is not perceived. Sharp at the far point; handles hyperopia & presbyopia.
+    const defocus = R => { const v = 1 / dm + R; return Math.max(0, Math.max(-v, v - aMax) - dofHalf); };
+    const diaPx = R => (pupil * defocus(R)) * viewingDistanceMm / pitch;
     const d1 = diaPx(p.sphere), d2 = diaPx(p.sphere + p.cylinder);
     return {
       sigmaX: Math.max(d1 * sigmaPerDia * strength, minSigma),
@@ -357,7 +361,7 @@
     // opts.overrideBlur = {sigmaX, sigmaY, angle} bypasses the prescription->blur
     // step (used by the "dial to clear" page, which sweeps blur directly).
     const blur = opts.overrideBlur || prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
-      opts.ppi || 264, { correctionStrength: opts.correctionStrength,
+      opts.ppi || 264, { correctionStrength: opts.correctionStrength, ageYears: opts.ageYears,
                          pupilMm: opts.pupilMm, sigmaPerDiameter: opts.sigmaPerDiameter });
     const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
     const psf = generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle);
@@ -392,7 +396,7 @@
   function simulateEyeView(rgba, W, H, prescription, opts) {
     opts = opts || {};
     const blur = prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
-      opts.ppi || 264, { correctionStrength: opts.correctionStrength,
+      opts.ppi || 264, { correctionStrength: opts.correctionStrength, ageYears: opts.ageYears,
                          pupilMm: opts.pupilMm, sigmaPerDiameter: opts.sigmaPerDiameter });
     const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
     const psf = generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle);
@@ -481,7 +485,7 @@ function rx(){ const R={sphere:+$('rs').value,cylinder:+$('rc').value,axis:+$('r
   L={sphere:+$('ls').value,cylinder:+$('lc').value,axis:+$('la').value};
   return VC.resolveRx($('mode').value,R,L); }
 function opts(){ return { viewingDistanceMm:(+$('dist').value)*10, ppi:+$('ppi').value,
-  correctionStrength:+$('cs').value, dynamicRange:+$('dr').value, regularization:+$('reg').value, precompensate:true }; }
+  correctionStrength:+$('cs').value, ageYears:+$('age').value, dynamicRange:+$('dr').value, regularization:+$('reg').value, precompensate:true }; }
 
 // ---- render + cache (toggle is instant; recompute only on settings change) ----
 let cache={ orig:null, corr:null, W:0, H:0 };
@@ -548,7 +552,7 @@ function redraw(){
 function syncLabels(){ $('distV').textContent=$('dist').value; $('ppiV').textContent=$('ppi').value;
   $('strCm').textContent=$('dist').value;
   $('csV').textContent=(+$('cs').value).toFixed(2); $('drV').textContent=(+$('dr').value).toFixed(2);
-  $('regV').textContent=(+$('reg').value).toFixed(3); }
+  $('regV').textContent=(+$('reg').value).toFixed(3); $('ageV').textContent=$('age').value; }
 
 // ---- credit-card PPI calibration (measures true CSS-pixel PPI) ----
 const CARD_MM = 85.6;   // ISO/IEC 7810 ID-1 card width
@@ -570,7 +574,7 @@ $('resetBtn').addEventListener('click',()=>{ $('cs').value='1.0'; $('dr').value=
 $('toggle').addEventListener('click',()=>{ showOn=!showOn; redraw(); });
 $('view').addEventListener('change',()=>{ viewMode=$('view').value;
   if(viewMode==='eyesim' && !cache.eyeOff) recompute(); else redraw(); });
-['mode','rs','rc','ra','ls','lc','la','dist','ppi','cs','dr','reg'].forEach(id=>$(id).addEventListener('input',recompute));
+['mode','rs','rc','ra','ls','lc','la','dist','ppi','age','cs','dr','reg'].forEach(id=>$(id).addEventListener('input',recompute));
 document.addEventListener('keydown',e=>{ if(e.code==='Space'){ e.preventDefault(); if(viewMode==='toggle'){ showOn=!showOn; redraw(); } }
   else if(e.key==='f'||e.key==='F'){ toggleFs(); } });
 function toggleFs(){ if(!document.fullscreenElement) $('stage').requestFullscreen?.(); else document.exitFullscreen?.(); }
