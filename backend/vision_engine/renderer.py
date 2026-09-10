@@ -25,13 +25,21 @@ from .psf import generate_psf_auto, generate_disk_psf, kernel_size_for_sigma
 from .deconvolution import wiener_precompensate, apply_psf
 
 
-def _build_psf(blur: BlurParams, psf_type: str = "disk"):
+def _build_psf(blur: BlurParams, psf_type: str = "disk", softness: float = 0.0):
     """Return a PSF for the blur. 'disk' = physically-correct pillbox (default);
-    'gaussian' = smooth fallback (no OTF nulls)."""
+    'gaussian' = smooth fallback (no OTF nulls). `softness` (px) rounds the disk
+    edge toward a real eye's PSF (diffraction + higher-order aberrations)."""
     if psf_type == "gaussian":
         return generate_psf_auto(blur.sigma_x, blur.sigma_y, blur.angle_degrees)
     size = max(int(math.ceil(max(blur.sigma_x, blur.sigma_y) * 4 * 1.2)) | 1, 3)
-    return generate_disk_psf(size, 2 * blur.sigma_x, 2 * blur.sigma_y, blur.angle_degrees)
+    if softness > 0:
+        size = (size + (int(math.ceil(softness * 6)) | 1)) | 1
+    psf = generate_disk_psf(size, 2 * blur.sigma_x, 2 * blur.sigma_y, blur.angle_degrees)
+    if softness > 0:
+        from scipy.ndimage import gaussian_filter
+        psf = gaussian_filter(psf, sigma=softness)
+        psf = psf / psf.sum()
+    return psf
 from .calibration import CalibrationProfile
 from . import color
 
@@ -70,6 +78,7 @@ class VisionRenderer:
         calibration: CalibrationProfile | None = None,
         precompensate: bool = True,
         psf_type: str = "disk",
+        softness: float = 0.0,
     ) -> RenderResult:
         """image: uint8 HxWx3 (sRGB). Returns a RenderResult.
 
@@ -88,7 +97,7 @@ class VisionRenderer:
             prescription, viewing_distance_mm, display,
             correction_strength=cal.correction_strength,
         )
-        psf = _build_psf(blur, psf_type)
+        psf = _build_psf(blur, psf_type, softness)
 
         chroma = (
             (cal.chromatic.red, cal.chromatic.green, cal.chromatic.blue)
@@ -132,6 +141,7 @@ class VisionRenderer:
         viewing_distance_mm: float,
         correction_strength: float = 1.0,
         psf_type: str = "disk",
+        softness: float = 0.0,
     ) -> np.ndarray:
         """Simulate what this prescription's eye perceives when it looks at `image`.
 
@@ -143,7 +153,7 @@ class VisionRenderer:
         blur = self.optical_model.prescription_to_blur(
             prescription, viewing_distance_mm, display, correction_strength
         )
-        psf = _build_psf(blur, psf_type)
+        psf = _build_psf(blur, psf_type, softness)
 
         srgb = image.astype(np.float64) / 255.0
         out = np.empty_like(srgb)

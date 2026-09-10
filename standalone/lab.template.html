@@ -72,6 +72,8 @@
       <option value="gaussian">Gaussian — smooth (old)</option>
     </select>
     <label style="margin-top:6px"><input type="checkbox" id="bandlimit" style="width:auto"> Band-limit target (below optical null)</label>
+    <label>Disk softness <span class="val" id="softV">0.0</span> px <span style="color:var(--muted)">(0=hard disk → real eye)</span></label>
+    <input id="soft" type="range" min="0" max="3" step="0.1" value="0" />
     <label>Correction strength <span class="val" id="csV">1.00</span></label>
     <input id="cs" type="range" min="0" max="1.5" step="0.05" value="1.0" />
     <label>Contrast headroom <span class="val" id="drV">0.55</span></label>
@@ -131,7 +133,7 @@ function build(kind){
 
 function rx(){ return { sphere:+$('sph').value, cylinder:+$('cyl').value, axis:+$('axis').value }; }
 function opts(){ return { viewingDistanceMm:(+$('dist').value)*10, ppi:+$('ppi').value, pupilMm:+$('pup').value,
-  correctionStrength:+$('cs').value, ageYears:+$('age').value, dynamicRange:+$('dr').value, regularization:+$('reg').value, method:$('method').value, psfType:$('psftype').value, bandlimit:$('bandlimit').checked, iters:30, precompensate:true }; }
+  correctionStrength:+$('cs').value, ageYears:+$('age').value, dynamicRange:+$('dr').value, regularization:+$('reg').value, method:$('method').value, psfType:$('psftype').value, bandlimit:$('bandlimit').checked, softness:+$('soft').value, iters:30, precompensate:true }; }
 
 // contrast-normalised sharpness (gradient energy after percentile stretch)
 function score(rgba){
@@ -145,7 +147,7 @@ function draw(id,rgba){ const cv=$(id); cv.width=SIZE; cv.height=SIZE; cv.getCon
 
 function syncLabels(){ $('distV').textContent=$('dist').value; $('ppiV').textContent=$('ppi').value;
   $('pupV').textContent=(+$('pup').value).toFixed(1); $('ageV').textContent=$('age').value; $('csV').textContent=(+$('cs').value).toFixed(2);
-  $('drV').textContent=(+$('dr').value).toFixed(2); $('regV').textContent=(+$('reg').value).toFixed(3); }
+  $('drV').textContent=(+$('dr').value).toFixed(2); $('regV').textContent=(+$('reg').value).toFixed(3); $('softV').textContent=(+$('soft').value).toFixed(1); }
 
 let timer=null;
 function recompute(){
@@ -170,7 +172,7 @@ function recompute(){
   }, 200);
 }
 
-['sph','cyl','axis','dist','ppi','pup','age','cs','dr','reg','content','method','psftype'].forEach(id=>$(id).addEventListener('input',recompute));
+['sph','cyl','axis','dist','ppi','pup','age','cs','dr','reg','content','method','psftype','soft'].forEach(id=>$(id).addEventListener('input',recompute));
 document.getElementById('bandlimit').addEventListener('change',recompute);
 $('reset').addEventListener('click',()=>{ $('cs').value='1.0'; $('dr').value='0.55'; $('reg').value='0.012'; recompute(); });
 syncLabels(); recompute();

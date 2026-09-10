@@ -109,6 +109,16 @@ aberrations) and we only know sigma approximately — so real-world results sit
 between the pessimistic Gaussian curve and this matched-disk curve. That gap is
 what real-eye data (Dial/Lab) will close.
 
+## Calibration knob for real eyes: `softness`
+
+A real eye is not an ideal hard disk — diffraction and higher-order aberrations
+round its edge. Added a one-parameter **`softness`** (px) that convolves the disk
+PSF with a Gaussian: `softness=0` = hard disk, larger = progressively softer,
+approaching a Gaussian blob. Exposed in the engine (`buildPsf`/`_build_psf`) and as
+a **Lab slider**. This is the single knob to tune once we have real-eye data: match
+the model's `softness` (and confirm sigma) to what real eyes report through the
+Dial/Lab, then the correction uses that calibrated PSF.
+
 ## Still deferred (largest remaining, but limited by the ceiling)
 
 - **Band-limit the target below the first OTF null** and the **disk/pillbox PSF** —
