@@ -70,6 +70,49 @@ def wiener_precompensate(
     return np.real(result)
 
 
+def tv_precompensate(
+    target: np.ndarray,
+    psf: np.ndarray,
+    iters: int = 30,
+    lam: float = 0.003,
+    step: float = 0.9,
+) -> np.ndarray:
+    """Box-constrained + total-variation pre-compensation (projected gradient).
+
+    Solves  min_p ‖H·p − target‖² + λ·TV(p)  subject to 0 ≤ p ≤ 1.
+
+    The 0..1 display constraint is enforced INSIDE the optimisation, so contrast
+    headroom is allocated adaptively (no fixed pre-squeeze) and ringing is
+    controlled by the TV term rather than by clipping a linear inverse after the
+    fact. Returns p already in [0, 1]. Slower than `wiener_precompensate` (this is
+    the high-quality path); on a smooth (Gaussian) OTF its main benefit over Wiener
+    is reduced clipping, not higher sharpness — a single flat display is physically
+    limited (see docs/research-findings.md).
+    """
+    if target.ndim != 2:
+        raise ValueError("tv_precompensate expects a single 2-D channel")
+    otf = _psf_to_otf(psf, target.shape)
+
+    def apply_otf(x: np.ndarray) -> np.ndarray:  # symmetric PSF -> serves as H and H^T
+        return np.real(np.fft.ifft2(np.fft.fft2(x) * otf))
+
+    def tv_grad(p: np.ndarray) -> np.ndarray:
+        eps = 1e-3
+        g = np.zeros_like(p)
+        for ax in (0, 1):
+            d_fwd = np.diff(p, axis=ax, append=np.take(p, [-1], axis=ax))
+            g += d_fwd / np.sqrt(d_fwd ** 2 + eps ** 2)
+            d_bwd = p - np.roll(p, 1, axis=ax)
+            g += d_bwd / np.sqrt(d_bwd ** 2 + eps ** 2)
+        return g
+
+    p = np.clip(target, 0.0, 1.0).astype(np.float64)
+    for _ in range(iters):
+        g_data = apply_otf(apply_otf(p) - target)
+        p = np.clip(p - step * (g_data + lam * tv_grad(p)), 0.0, 1.0)
+    return p
+
+
 def apply_psf(image: np.ndarray, psf: np.ndarray) -> np.ndarray:
     """Convolve an image with a PSF (simulates the eye's blur). Single channel."""
     if image.ndim != 2:

@@ -61,6 +61,11 @@
     <input id="age" type="range" min="8" max="80" step="1" value="35" />
 
     <div class="sectionH">Correction tuning</div>
+    <label>Algorithm</label>
+    <select id="method">
+      <option value="wiener">Wiener + clip (fast)</option>
+      <option value="tv">TV + box-constrained (HQ, slower)</option>
+    </select>
     <label>Correction strength <span class="val" id="csV">1.00</span></label>
     <input id="cs" type="range" min="0" max="1.5" step="0.05" value="1.0" />
     <label>Contrast headroom <span class="val" id="drV">0.55</span></label>
@@ -237,6 +242,66 @@
     return ore;
   }
 
+  // ---- Phase 2: constrained + total-variation deconvolution ----
+  // Precompute the PSF's OTF once so the iterative solve is cheap.
+  function _otf(psf, ksize, W, H) {
+    const re = psfToPadded(psf, ksize, W, H), im = new Float64Array(W * H);
+    fft2(re, im, W, H, -1);
+    return { re, im };
+  }
+  // Convolve img with the (real, symmetric) PSF given its OTF. For a symmetric
+  // PSF H^T = H, so this serves as both the forward blur and its transpose.
+  function _applyOTF(img, W, H, otf) {
+    const N = W * H, ire = Float64Array.from(img), iim = new Float64Array(N);
+    fft2(ire, iim, W, H, -1);
+    const ore = new Float64Array(N), oim = new Float64Array(N);
+    for (let i = 0; i < N; i++) {
+      ore[i] = ire[i] * otf.re[i] - iim[i] * otf.im[i];
+      oim[i] = ire[i] * otf.im[i] + iim[i] * otf.re[i];
+    }
+    fft2(ore, oim, W, H, +1);
+    return ore;
+  }
+  // Gradient of a smoothed anisotropic total-variation penalty (edge-preserving).
+  function _tvGrad(p, W, H) {
+    const g = new Float64Array(W * H), eps = 1e-3;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x, c = p[i];
+      const r = x + 1 < W ? p[i + 1] : c, l = x > 0 ? p[i - 1] : c;
+      const d = y + 1 < H ? p[i + W] : c, u = y > 0 ? p[i - W] : c;
+      g[i] = (c - r) / Math.sqrt((c - r) * (c - r) + eps * eps)
+           + (c - l) / Math.sqrt((c - l) * (c - l) + eps * eps)
+           + (c - d) / Math.sqrt((c - d) * (c - d) + eps * eps)
+           + (c - u) / Math.sqrt((c - u) * (c - u) + eps * eps);
+    }
+    return g;
+  }
+  // Solve  min_p ‖H·p − target‖² + λ·TV(p)  s.t. 0 ≤ p ≤ 1  (projected gradient).
+  // The box constraint lives INSIDE the solve, so contrast headroom is allocated
+  // adaptively (no fixed pre-squeeze) and ringing is controlled by TV, not by
+  // clipping a linear inverse after the fact.
+  function tvPrecompensate(target, W, H, psf, ksize, opts) {
+    opts = opts || {};
+    const iters = opts.iters || 30;
+    const lam = opts.lambda == null ? 0.003 : opts.lambda;
+    const step = opts.step || 0.9;                 // ‖HᵀH‖ ≤ 1 for a normalised PSF
+    const otf = _otf(psf, ksize, W, H), N = W * H;
+    const p = new Float64Array(N);
+    for (let i = 0; i < N; i++) p[i] = Math.min(1, Math.max(0, target[i]));
+    for (let k = 0; k < iters; k++) {
+      const Hp = _applyOTF(p, W, H, otf);
+      const resid = new Float64Array(N);
+      for (let i = 0; i < N; i++) resid[i] = Hp[i] - target[i];
+      const gdata = _applyOTF(resid, W, H, otf);   // Hᵀ(H p − t)
+      const gtv = _tvGrad(p, W, H);
+      for (let i = 0; i < N; i++) {
+        const v = p[i] - step * (gdata[i] + lam * gtv[i]);
+        p[i] = v < 0 ? 0 : (v > 1 ? 1 : v);
+      }
+    }
+    return p;
+  }
+
   // ---- colour ----
   const srgbToLinear = x => (x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4));
   const linearToSrgb = x => (x <= 0.0031308 ? x * 12.92 : 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
@@ -317,6 +382,39 @@
     const PW = nextPow2(W), PH = nextPow2(H);
     const out = new Uint8ClampedArray(rgba.length);
     let clipped = 0;
+
+    // ---- HQ path: luma-only, box-constrained + TV deconvolution ----
+    // (Phase 2) One expensive solve on luminance; chroma passes through. The
+    // constraint allocates contrast adaptively, so no fixed pre-squeeze is needed
+    // beyond the optional `dynamicRange` headroom bias.
+    if (precomp && opts.method === "tv") {
+      const N = PW * PH;
+      const Rl = new Float64Array(N), Gl = new Float64Array(N), Bl = new Float64Array(N), Y = new Float64Array(N);
+      for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
+        const sx = Math.min(x, W - 1), sy = Math.min(y, H - 1), i = y * PW + x, o = (sy * W + sx) * 4;
+        const r = 0.5 + (srgbToLinear(rgba[o] / 255) - 0.5) * dr;
+        const g = 0.5 + (srgbToLinear(rgba[o + 1] / 255) - 0.5) * dr;
+        const b = 0.5 + (srgbToLinear(rgba[o + 2] / 255) - 0.5) * dr;
+        Rl[i] = r; Gl[i] = g; Bl[i] = b; Y[i] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      }
+      const Yp = tvPrecompensate(Y, PW, PH, psf, ksize,
+        { iters: opts.iters || 30, lambda: opts.tvLambda == null ? 0.003 : opts.tvLambda });
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = y * PW + x, yv = Y[i], yp = Yp[i];
+        if (yp <= 0 || yp >= 1) clipped++;
+        const ratio = yv > 1e-4 ? yp / yv : 1;
+        const px = (y * W + x) * 4;
+        const rc = yv > 1e-4 ? Rl[i] * ratio : yp;
+        const gc = yv > 1e-4 ? Gl[i] * ratio : yp;
+        const bc = yv > 1e-4 ? Bl[i] * ratio : yp;
+        out[px]     = Math.round(linearToSrgb(Math.min(1, Math.max(0, rc))) * 255);
+        out[px + 1] = Math.round(linearToSrgb(Math.min(1, Math.max(0, gc))) * 255);
+        out[px + 2] = Math.round(linearToSrgb(Math.min(1, Math.max(0, bc))) * 255);
+        out[px + 3] = 255;
+      }
+      return { data: out, blur, ksize, clippedFraction: clipped / (W * H), method: "tv" };
+    }
+
     const chan = new Float64Array(PW * PH);
     for (let c = 0; c < 3; c++) {
       // load channel into padded buffer (edge-replicate padding)
@@ -367,7 +465,7 @@
 
   const VC = {
     fft1d, fft2, generatePsf, kernelSizeForSigma, nextPow2, psfToPadded,
-    wienerPrecompensate, applyPsf, srgbToLinear, linearToSrgb,
+    wienerPrecompensate, tvPrecompensate, applyPsf, srgbToLinear, linearToSrgb,
     prescriptionToBlur, render, simulateEyeView,
     averagePrescriptions, resolveRx,
   };
@@ -397,7 +495,7 @@ function build(kind){
 
 function rx(){ return { sphere:+$('sph').value, cylinder:+$('cyl').value, axis:+$('axis').value }; }
 function opts(){ return { viewingDistanceMm:(+$('dist').value)*10, ppi:+$('ppi').value, pupilMm:+$('pup').value,
-  correctionStrength:+$('cs').value, ageYears:+$('age').value, dynamicRange:+$('dr').value, regularization:+$('reg').value, precompensate:true }; }
+  correctionStrength:+$('cs').value, ageYears:+$('age').value, dynamicRange:+$('dr').value, regularization:+$('reg').value, method:$('method').value, iters:30, precompensate:true }; }
 
 // contrast-normalised sharpness (gradient energy after percentile stretch)
 function score(rgba){
@@ -436,7 +534,7 @@ function recompute(){
   }, 200);
 }
 
-['sph','cyl','axis','dist','ppi','pup','age','cs','dr','reg','content'].forEach(id=>$(id).addEventListener('input',recompute));
+['sph','cyl','axis','dist','ppi','pup','age','cs','dr','reg','content','method'].forEach(id=>$(id).addEventListener('input',recompute));
 $('reset').addEventListener('click',()=>{ $('cs').value='1.0'; $('dr').value='0.55'; $('reg').value='0.012'; recompute(); });
 syncLabels(); recompute();
 </script>

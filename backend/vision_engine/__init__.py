@@ -12,7 +12,7 @@ renderer. Public surface:
 
 from .optical_model import OpticalModel, EyePrescription, DisplayParams, BlurParams
 from .psf import generate_psf, generate_psf_auto
-from .deconvolution import wiener_precompensate, apply_psf
+from .deconvolution import wiener_precompensate, tv_precompensate, apply_psf
 from .calibration import CalibrationProfile, PairwiseStaircase, ChromaticCompensation
 from .renderer import VisionRenderer, RenderResult
 from .adaptive_lens import (
@@ -23,7 +23,7 @@ from .adaptive_lens import (
 __all__ = [
     "OpticalModel", "EyePrescription", "DisplayParams", "BlurParams",
     "generate_psf", "generate_psf_auto",
-    "wiener_precompensate", "apply_psf",
+    "wiener_precompensate", "tv_precompensate", "apply_psf",
     "CalibrationProfile", "PairwiseStaircase", "ChromaticCompensation",
     "VisionRenderer", "RenderResult",
     "TunableLens", "LensSpec", "LENS_SPECS", "SOLID_STATE_LENSES", "LensCommand",

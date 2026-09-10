@@ -37,23 +37,45 @@ per topic in the agents' domains (see also `optical-model.md`).
 4. **Pupil default 4.0 → 3.5 mm** (indoor screen, photopic-mesopic) and it drives
    the DoF dead-band. Still an input.
 
-## Deferred (Phase 2 — bigger algorithm work, offered next)
+## Phase 2 — implemented (high-quality deconvolution path)
 
-From the prior-art review, these are the reported quality wins beyond our
-Wiener+clip on a single flat panel:
+Added a selectable **TV + box-constrained** algorithm alongside Wiener (engine:
+`tvPrecompensate` / `tv_precompensate`; render `method:"tv"`; selector in the Lab):
 
-- **Band-limit the target below the first OTF null** (don't invert across a
-  zero-crossing) — reported as the single biggest win for a flat screen.
-- **Box-constrained deconvolution** (enforce 0–1 inside the solve via
-  ADMM/projected gradient) instead of clip-after-linear-inverse.
-- **Total-variation regularization** instead of/atop Wiener (better perceived
-  contrast at equal sharpness).
-- **Luma-only (YUV) deconvolution**; leave chroma untouched.
-- **Adaptive contrast squeeze** (minimum needed per image) instead of a fixed 0.55.
-- **Per-channel chromatic correction** (defocus offsets ≈ {R +0.4, G 0, B −0.5} D)
-  — worth ~0.5 D of residual color blur.
-- **Disk/pillbox PSF** for deconvolution fidelity (needs the band-limiting above
-  to stay stable; Gaussian remains the stable fallback).
+- **Box-constrained deconvolution** — projected gradient solving
+  `min_p ‖H·p − target‖² + λ·TV(p)` s.t. `0 ≤ p ≤ 1`. The display range is enforced
+  *inside* the solve, so ringing is controlled by TV instead of by clipping a
+  linear inverse afterward.
+- **Total-variation regularization** — edge-preserving, replaces the L2/Wiener
+  penalty on the HQ path.
+- **Luma-only** — one solve on linear luminance; chroma passes through (≈3× cheaper
+  for colour, avoids colour ringing).
+- **Adaptive contrast** — the box constraint allocates headroom per image, so no
+  fixed pre-squeeze is required beyond the optional `dynamicRange` bias.
+
+**Empirical outcome (honest).** Benchmarked Wiener+clip vs TV on our own metrics
+(contrast-normalised perceived sharpness + a background-ringing measure), luma bars/text:
+
+| Regime | Wiener | TV | Takeaway |
+|---|---|---|---|
+| Mild blur (σ≲1 px) | already near-ideal | ~equal, slightly softer | little to gain |
+| Strong blur (σ 5–8 px) | sharp ~3–6% | sharp ~3–6% | **both hit the physical ceiling** |
+| Clipping (display-range use) | 8–27% clipped | **1–15% clipped** | TV's real, consistent win |
+
+So TV is a *principled refinement* — it uses the display's range better (less
+clipping) and controls ringing inside the solve — **not** a sharpness miracle. On a
+smooth (Gaussian) OTF, Wiener is already close to optimal, and neither algorithm
+beats the single-flat-screen ceiling at high blur. TV is exposed as an optional
+"HQ (slower)" mode; Wiener stays the fast default for live/interactive pages.
+
+## Still deferred (largest remaining, but limited by the ceiling)
+
+- **Band-limit the target below the first OTF null** and the **disk/pillbox PSF** —
+  these go together (the disk PSF is physically correct and *has* nulls; the
+  Gaussian we use has none, which is why Wiener is already stable on it). Expected
+  to matter most where the disk-null problem bites; the flat-screen ceiling caps
+  the payoff.
+- **Per-channel chromatic correction** (defocus offsets ≈ {R +0.4, G 0, B −0.5} D).
 
 ## The honest ceiling (all sources agree)
 

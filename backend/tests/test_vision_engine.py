@@ -3,8 +3,20 @@ import pytest
 
 from vision_engine import (
     OpticalModel, EyePrescription, DisplayParams, CalibrationProfile, VisionRenderer,
-    generate_psf, wiener_precompensate, apply_psf, PairwiseStaircase,
+    generate_psf, wiener_precompensate, tv_precompensate, apply_psf, PairwiseStaircase,
 )
+
+
+def test_tv_precompensate_respects_box_and_reduces_clipping():
+    rng = np.random.default_rng(4)
+    img = rng.random((64, 64)) * 0.6 + 0.2
+    psf = generate_psf(21, 21, 3.0, 3.0, 0.0)
+    tv = tv_precompensate(img, psf, iters=20, lam=0.01)
+    # TV output already satisfies the 0..1 display constraint (no post-clip needed)
+    assert tv.min() >= -1e-9 and tv.max() <= 1 + 1e-9
+    # Wiener output overshoots the box (that overshoot is what must be clipped)
+    wiener = wiener_precompensate(img, psf, regularization=0.012)
+    assert wiener.min() < 0 or wiener.max() > 1
 
 
 # ---- prescription validation ------------------------------------------------
