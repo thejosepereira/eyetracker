@@ -22,3 +22,5 @@ backend/outputs/
 research/test-images/*.png
 !research/test-images/comparison.png
 !research/test-images/adaptive_glasses.png
+!research/test-images/phase2_study.png
+!research/test-images/phase2_montage.png

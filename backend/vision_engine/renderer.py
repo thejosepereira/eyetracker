@@ -17,11 +17,21 @@ shader, native library, or OEM display stage.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import numpy as np
 
 from .optical_model import OpticalModel, EyePrescription, DisplayParams, BlurParams
-from .psf import generate_psf_auto
+from .psf import generate_psf_auto, generate_disk_psf, kernel_size_for_sigma
 from .deconvolution import wiener_precompensate, apply_psf
+
+
+def _build_psf(blur: BlurParams, psf_type: str = "disk"):
+    """Return a PSF for the blur. 'disk' = physically-correct pillbox (default);
+    'gaussian' = smooth fallback (no OTF nulls)."""
+    if psf_type == "gaussian":
+        return generate_psf_auto(blur.sigma_x, blur.sigma_y, blur.angle_degrees)
+    size = max(int(math.ceil(max(blur.sigma_x, blur.sigma_y) * 4 * 1.2)) | 1, 3)
+    return generate_disk_psf(size, 2 * blur.sigma_x, 2 * blur.sigma_y, blur.angle_degrees)
 from .calibration import CalibrationProfile
 from . import color
 
@@ -59,6 +69,7 @@ class VisionRenderer:
         viewing_distance_mm: float,
         calibration: CalibrationProfile | None = None,
         precompensate: bool = True,
+        psf_type: str = "disk",
     ) -> RenderResult:
         """image: uint8 HxWx3 (sRGB). Returns a RenderResult.
 
@@ -77,7 +88,7 @@ class VisionRenderer:
             prescription, viewing_distance_mm, display,
             correction_strength=cal.correction_strength,
         )
-        psf = generate_psf_auto(blur.sigma_x, blur.sigma_y, blur.angle_degrees)
+        psf = _build_psf(blur, psf_type)
 
         chroma = (
             (cal.chromatic.red, cal.chromatic.green, cal.chromatic.blue)
@@ -120,6 +131,7 @@ class VisionRenderer:
         display: DisplayParams,
         viewing_distance_mm: float,
         correction_strength: float = 1.0,
+        psf_type: str = "disk",
     ) -> np.ndarray:
         """Simulate what this prescription's eye perceives when it looks at `image`.
 
@@ -131,7 +143,7 @@ class VisionRenderer:
         blur = self.optical_model.prescription_to_blur(
             prescription, viewing_distance_mm, display, correction_strength
         )
-        psf = generate_psf_auto(blur.sigma_x, blur.sigma_y, blur.angle_degrees)
+        psf = _build_psf(blur, psf_type)
 
         srgb = image.astype(np.float64) / 255.0
         out = np.empty_like(srgb)

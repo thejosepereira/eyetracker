@@ -5,6 +5,17 @@ from vision_engine import (
     OpticalModel, EyePrescription, DisplayParams, CalibrationProfile, VisionRenderer,
     generate_psf, wiener_precompensate, tv_precompensate, apply_psf, PairwiseStaircase,
 )
+from vision_engine.psf import generate_disk_psf
+
+
+def test_disk_psf_normalised_and_bounded():
+    psf = generate_disk_psf(31, 6.0, 4.0, 30.0)
+    assert psf.shape == (31, 31)
+    assert abs(psf.sum() - 1.0) < 1e-9
+    assert (psf >= 0).all()
+    # an elliptical disk covers more area than a thin one -> more nonzero pixels
+    thin = generate_disk_psf(31, 6.0, 1.0, 0.0)
+    assert (psf > 0).sum() > (thin > 0).sum()
 
 
 def test_tv_precompensate_respects_box_and_reduces_clipping():

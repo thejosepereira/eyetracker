@@ -68,6 +68,47 @@ smooth (Gaussian) OTF, Wiener is already close to optimal, and neither algorithm
 beats the single-flat-screen ceiling at high blur. TV is exposed as an optional
 "HQ (slower)" mode; Wiener stays the fast default for live/interactive pages.
 
+## Phase 2 study — the decisive finding: use the DISK PSF
+
+A full simulation sweep (`research/experiments/phase2_study.js`, chart
+`research/test-images/phase2_study.png`, montage `phase2_montage.png`) pitted five
+algorithms against a **physically-correct disk-blur eye** across prescriptions
+(−1 to −3 D) and distances (50–90 cm), scored by contrast-normalised perceived
+legibility (Pearson correlation to the sharp target).
+
+**Result: the PSF *model* matters more than the deconvolution algorithm.**
+
+| Config | −3 D @ 70 cm (σ≈4.3px) | vs OFF 0.35 |
+|---|---|---|
+| correction OFF | 0.35 | — |
+| Wiener · **Gaussian** (old default) | 0.33 | **worse** |
+| TV · Gaussian | 0.37 | +0.02 |
+| **Wiener · DISK (matched)** | **0.59** | **+0.24** |
+| TV · disk | 0.54 | +0.19 |
+| TV · disk · band-limited | 0.45 | +0.10 |
+
+The disk (pillbox) PSF is what a defocused eye *actually* produces; the Gaussian
+we shipped first was the wrong model, which is why it barely helped and sometimes
+hurt. With the matched disk PSF, **Wiener wins** and gives real gains across the
+whole range (and beyond σ≈1px where Gaussian collapses toward/under OFF).
+
+**Robustness (how accurate must calibration be?)** For the −3 D case, the disk
+correction is robust to a **±15%** error in assumed blur (legibility 0.51–0.59)
+but drops *below* OFF beyond **±30%**. So per-user calibration of the blur
+(distance, PPI, pupil, prescription) is **essential** — this is exactly what the
+"Dial to Clear" flow pins down. Wrong sigma is worse than no correction.
+
+**Implemented:** disk PSF is now the **default** (`psfType:"disk"`) for both the
+correction and the eye simulation in the JS and Python engines; `bandlimit` and
+`psfType` are exposed (Lab has selectors). Band-limiting trades a little legibility
+for less ringing/contrast cost — left optional.
+
+**Honest caveat:** the study assumes the eye is an ideal disk and the correction
+knows sigma exactly (matched). Real eyes soften the disk (diffraction, higher-order
+aberrations) and we only know sigma approximately — so real-world results sit
+between the pessimistic Gaussian curve and this matched-disk curve. That gap is
+what real-eye data (Dial/Lab) will close.
+
 ## Still deferred (largest remaining, but limited by the ceiling)
 
 - **Band-limit the target below the first OTF null** and the **disk/pillbox PSF** —

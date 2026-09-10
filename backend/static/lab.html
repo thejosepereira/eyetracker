@@ -66,6 +66,12 @@
       <option value="wiener">Wiener + clip (fast)</option>
       <option value="tv">TV + box-constrained (HQ, slower)</option>
     </select>
+    <label>Eye / PSF model</label>
+    <select id="psftype">
+      <option value="disk">Disk — physically correct (best)</option>
+      <option value="gaussian">Gaussian — smooth (old)</option>
+    </select>
+    <label style="margin-top:6px"><input type="checkbox" id="bandlimit" style="width:auto"> Band-limit target (below optical null)</label>
     <label>Correction strength <span class="val" id="csV">1.00</span></label>
     <input id="cs" type="range" min="0" max="1.5" step="0.05" value="1.0" />
     <label>Contrast headroom <span class="val" id="drV">0.55</span></label>
@@ -182,7 +188,57 @@
     let s = Math.ceil(sigma * 6) | 1; return Math.max(s, 3);
   }
 
+  // ---- Disk / pillbox PSF: the physically-correct geometric defocus PSF ----
+  // Elliptical uniform disk (semi-axes rx, ry px, rotated by angleDeg), edge
+  // anti-aliased by 3x3 supersampling, normalised to sum 1. Unlike the Gaussian,
+  // its OTF has genuine nulls (this is the real eye's defocus PSF).
+  function generateDiskPsf(size, rx, ry, angleDeg) {
+    rx = Math.max(rx, 0.5); ry = Math.max(ry, 0.5);
+    const c = (size - 1) / 2, th = angleDeg * Math.PI / 180;
+    const cos = Math.cos(th), sin = Math.sin(th);
+    const psf = new Float64Array(size * size); let sum = 0;
+    const ss = 3, inv = 1 / ss, off = (ss - 1) / (2 * ss);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      let frac = 0;
+      for (let sy = 0; sy < ss; sy++) for (let sx = 0; sx < ss; sx++) {
+        const dx = (x - c) + (sx * inv - off), dy = (y - c) + (sy * inv - off);
+        const xr = dx * cos + dy * sin, yr = -dx * sin + dy * cos;
+        if ((xr / rx) ** 2 + (yr / ry) ** 2 <= 1) frac += 1;
+      }
+      const v = frac / (ss * ss); psf[y * size + x] = v; sum += v;
+    }
+    if (sum <= 0) { psf[((size * size) - 1) >> 1] = 1; return psf; }
+    for (let i = 0; i < psf.length; i++) psf[i] /= sum;
+    return psf;
+  }
+
+  // Band-limit an image below a radial cutoff (cycles/pixel) via an ideal
+  // frequency low-pass. Used to keep the target below a disk-OTF's first null so
+  // the inverse never has to reconstruct across a zero-crossing.
+  function bandLimit(img, W, H, cutoff) {
+    const re = Float64Array.from(img), im = new Float64Array(W * H);
+    fft2(re, im, W, H, -1);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const fx = (x <= W / 2 ? x : x - W) / W, fy = (y <= H / 2 ? y : y - H) / H;
+      if (Math.sqrt(fx * fx + fy * fy) > cutoff) { const i = y * W + x; re[i] = 0; im[i] = 0; }
+    }
+    fft2(re, im, W, H, +1);
+    return re;
+  }
+
   const nextPow2 = n => { let p = 1; while (p < n) p <<= 1; return p; };
+
+  // Build the correction/eye PSF from blur params. psfType: "disk" (physically
+  // correct geometric defocus, DEFAULT) or "gaussian" (smooth, no OTF nulls).
+  function buildPsf(blur, psfType) {
+    if (psfType === "gaussian") {
+      const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
+      return { psf: generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle), ksize };
+    }
+    // disk: diameter = 4σ (σ = disk radius / 2), so radius = 2σ
+    const ksize = Math.max(Math.ceil(Math.max(blur.sigmaX, blur.sigmaY) * 4 * 1.2) | 1, 3);
+    return { psf: generateDiskPsf(ksize, 2 * blur.sigmaX, 2 * blur.sigmaY, blur.angle), ksize };
+  }
 
   // Embed a (possibly larger-than-image) PSF into WxH with its centre at origin.
   function psfToPadded(psf, ksize, W, H) {
@@ -375,8 +431,10 @@
     const blur = opts.overrideBlur || prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
       opts.ppi || 264, { correctionStrength: opts.correctionStrength, ageYears: opts.ageYears,
                          pupilMm: opts.pupilMm, sigmaPerDiameter: opts.sigmaPerDiameter });
-    const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
-    const psf = generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle);
+    const built = buildPsf(blur, opts.psfType);
+    const psf = built.psf, ksize = built.ksize;
+    // Optional band-limit cutoff (cycles/px) just below the disk-OTF first null.
+    const blCutoff = opts.bandlimit ? 0.9 * 1.22 / (4 * Math.max(blur.sigmaX, blur.sigmaY)) : 0;
 
     // work at power-of-two padded size to keep the FFT radix-2
     const PW = nextPow2(W), PH = nextPow2(H);
@@ -397,7 +455,8 @@
         const b = 0.5 + (srgbToLinear(rgba[o + 2] / 255) - 0.5) * dr;
         Rl[i] = r; Gl[i] = g; Bl[i] = b; Y[i] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
       }
-      const Yp = tvPrecompensate(Y, PW, PH, psf, ksize,
+      const Ytar = blCutoff > 0 ? bandLimit(Y, PW, PH, blCutoff) : Y;
+      const Yp = tvPrecompensate(Ytar, PW, PH, psf, ksize,
         { iters: opts.iters || 30, lambda: opts.tvLambda == null ? 0.003 : opts.tvLambda });
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         const i = y * PW + x, yv = Y[i], yp = Yp[i];
@@ -424,8 +483,10 @@
         chan[y * PW + x] = 0.5 + (lin - 0.5) * dr;         // contrast reduction
       }
       let res;
-      if (precomp) res = wienerPrecompensate(chan, PW, PH, psf, ksize, K);
-      else res = chan;
+      if (precomp) {
+        const src = blCutoff > 0 ? bandLimit(chan, PW, PH, blCutoff) : chan;
+        res = wienerPrecompensate(src, PW, PH, psf, ksize, K);
+      } else res = chan;
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         let v = res[y * PW + x];
         if (v < 0 || v > 1) clipped++;
@@ -443,8 +504,8 @@
     const blur = prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
       opts.ppi || 264, { correctionStrength: opts.correctionStrength, ageYears: opts.ageYears,
                          pupilMm: opts.pupilMm, sigmaPerDiameter: opts.sigmaPerDiameter });
-    const ksize = Math.max(kernelSizeForSigma(blur.sigmaX), kernelSizeForSigma(blur.sigmaY));
-    const psf = generatePsf(ksize, blur.sigmaX, blur.sigmaY, blur.angle);
+    const built = buildPsf(blur, opts.psfType);
+    const psf = built.psf, ksize = built.ksize;
     const PW = nextPow2(W), PH = nextPow2(H);
     const out = new Uint8ClampedArray(rgba.length);
     const chan = new Float64Array(PW * PH);
@@ -464,7 +525,7 @@
   }
 
   const VC = {
-    fft1d, fft2, generatePsf, kernelSizeForSigma, nextPow2, psfToPadded,
+    fft1d, fft2, generatePsf, generateDiskPsf, bandLimit, kernelSizeForSigma, nextPow2, psfToPadded,
     wienerPrecompensate, tvPrecompensate, applyPsf, srgbToLinear, linearToSrgb,
     prescriptionToBlur, render, simulateEyeView,
     averagePrescriptions, resolveRx,
@@ -495,7 +556,7 @@ function build(kind){
 
 function rx(){ return { sphere:+$('sph').value, cylinder:+$('cyl').value, axis:+$('axis').value }; }
 function opts(){ return { viewingDistanceMm:(+$('dist').value)*10, ppi:+$('ppi').value, pupilMm:+$('pup').value,
-  correctionStrength:+$('cs').value, ageYears:+$('age').value, dynamicRange:+$('dr').value, regularization:+$('reg').value, method:$('method').value, iters:30, precompensate:true }; }
+  correctionStrength:+$('cs').value, ageYears:+$('age').value, dynamicRange:+$('dr').value, regularization:+$('reg').value, method:$('method').value, psfType:$('psftype').value, bandlimit:$('bandlimit').checked, iters:30, precompensate:true }; }
 
 // contrast-normalised sharpness (gradient energy after percentile stretch)
 function score(rgba){
@@ -534,7 +595,8 @@ function recompute(){
   }, 200);
 }
 
-['sph','cyl','axis','dist','ppi','pup','age','cs','dr','reg','content','method'].forEach(id=>$(id).addEventListener('input',recompute));
+['sph','cyl','axis','dist','ppi','pup','age','cs','dr','reg','content','method','psftype'].forEach(id=>$(id).addEventListener('input',recompute));
+document.getElementById('bandlimit').addEventListener('change',recompute);
 $('reset').addEventListener('click',()=>{ $('cs').value='1.0'; $('dr').value='0.55'; $('reg').value='0.012'; recompute(); });
 syncLabels(); recompute();
 </script>

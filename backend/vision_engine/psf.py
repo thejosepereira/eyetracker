@@ -53,6 +53,42 @@ def generate_psf(
     return (psf / total).astype(np.float64)
 
 
+def generate_disk_psf(
+    size: int, radius_x: float, radius_y: float, angle_degrees: float
+) -> np.ndarray:
+    """Elliptical uniform-disk (pillbox) PSF — the physically-correct geometric
+    defocus PSF. Edge anti-aliased by 3x3 supersampling, normalised to sum 1.
+
+    Unlike the Gaussian, the disk OTF has genuine nulls (this is what a defocused
+    eye actually produces). Matching the correction PSF to this markedly improves
+    the achievable correction (see docs/phase2-study.md).
+    """
+    rx = max(float(radius_x), 0.5)
+    ry = max(float(radius_y), 0.5)
+    c = (size - 1) / 2.0
+    theta = math.radians(angle_degrees)
+    cos_t, sin_t = math.cos(theta), math.sin(theta)
+    ss = 3
+    offs = [(k + 0.5) / ss - 0.5 for k in range(ss)]
+    psf = np.zeros((size, size), dtype=np.float64)
+    for y in range(size):
+        for x in range(size):
+            frac = 0
+            for oy in offs:
+                for ox in offs:
+                    dx, dy = (x - c) + ox, (y - c) + oy
+                    xr = dx * cos_t + dy * sin_t
+                    yr = -dx * sin_t + dy * cos_t
+                    if (xr / rx) ** 2 + (yr / ry) ** 2 <= 1.0:
+                        frac += 1
+            psf[y, x] = frac / (ss * ss)
+    total = psf.sum()
+    if total <= 0:
+        psf[size // 2, size // 2] = 1.0
+        return psf
+    return psf / total
+
+
 def kernel_size_for_sigma(sigma: float) -> int:
     """Odd kernel size that comfortably contains a Gaussian of given sigma."""
     size = int(math.ceil(sigma * 6.0)) | 1  # ~ +/-3 sigma, forced odd
