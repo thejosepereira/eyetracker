@@ -98,6 +98,10 @@ class VisionRenderer:
             correction_strength=cal.correction_strength,
         )
         psf = _build_psf(blur, psf_type, softness)
+        # Scale contrast squeeze by actual blur: no blur -> no greying.
+        _max_sig = max(blur.sigma_x, blur.sigma_y)
+        _blur_amt = min(1.0, max(0.0, (_max_sig - 0.36) / (1.5 - 0.36)))
+        dr_eff = (1 - (1 - cal.dynamic_range) * _blur_amt) if precompensate else cal.dynamic_range
 
         chroma = (
             (cal.chromatic.red, cal.chromatic.green, cal.chromatic.blue)
@@ -111,7 +115,7 @@ class VisionRenderer:
             lin = color.srgb_to_linear(srgb[..., c])
             # Squeeze the target's contrast to leave room for the overshoot that
             # pre-compensation needs, then invert the blur.
-            target = _reduce_contrast(lin, cal.dynamic_range)
+            target = _reduce_contrast(lin, dr_eff)
             # Per-channel PSF scaling supports (later) chromatic-aberration comp.
             chan_psf = psf if chroma[c] == 1.0 else generate_psf_auto(
                 blur.sigma_x * chroma[c], blur.sigma_y * chroma[c], blur.angle_degrees

@@ -93,11 +93,11 @@
       <div><label>Axis</label><input id="la" type="number" step="5" value="70" /></div>
     </div>
 
-    <label>Fixed eye distance <span class="val" id="distV">35</span> cm</label>
-    <input id="dist" type="range" min="15" max="80" value="35" />
+    <label>Fixed eye distance <span class="val" id="distV">65</span> cm</label>
+    <input id="dist" type="range" min="15" max="90" value="65" />
     <div class="meta" style="margin-top:6px">
       Keep the eye you're testing exactly this far from the screen and hold it steady.
-      <b>Easy rig:</b> cut a piece of string <b><span id="strCm">35</span> cm</b> long, tape one end at the
+      <b>Easy rig:</b> cut a piece of string <b><span id="strCm">65</span> cm</b> long, tape one end at the
       middle of the screen, hold the other end to your cheek just below the eye — string taut = correct distance.
     </div>
     <label style="margin-top:14px">Screen PPI <span class="val" id="ppiV">140</span></label>
@@ -236,10 +236,14 @@ function recompute(){
       cache.eyeOn=new ImageData(new Uint8ClampedArray(on),W,H);
     }
     const r=rx();
+    const inFocus = res.blur.sigmaX < 0.4 && res.blur.sigmaY < 0.4;
     $('blurMeta').innerHTML=`applied Rx ${r.sphere.toFixed(2)} / ${r.cylinder.toFixed(2)} × ${Math.round(r.axis)}°<br>`+
-      `blur σx=${res.blur.sigmaX.toFixed(1)}px σy=${res.blur.sigmaY.toFixed(1)}px @${res.blur.angle}° · PSF ${res.ksize}×${res.ksize} · clipped ${(res.clippedFraction*100).toFixed(0)}%`;
+      `blur σx=${res.blur.sigmaX.toFixed(1)}px σy=${res.blur.sigmaY.toFixed(1)}px @${res.blur.angle}° · PSF ${res.ksize}×${res.ksize} · clipped ${(res.clippedFraction*100).toFixed(0)}%`+
+      (inFocus ? `<br><b style="color:var(--good)">This eye is ~in focus at this distance — nothing to correct.</b> Move farther away (or raise the prescription) to see the effect.` : ``);
     $('hint').textContent =
-      viewMode==='eyesim'
+      inFocus
+        ? 'No blur to correct here, so the image is left unchanged (that is correct — a myopic eye sees near distances sharply). Increase the distance until "blur σ" is a few px, then the reverse-distortion appears.'
+      : viewMode==='eyesim'
         ? 'PROOF view: both panels are simulated — this is what an eye with your prescription would perceive. If the RIGHT panel is sharper than the LEFT, the pre-distortion math is working (no need to take your own glasses off).'
       : kind==='threshold'
         ? 'Rows are auto-sized to your blur. Flip ON/OFF (spacebar) and watch the ◄ threshold row and the two smaller rows below it — that is where correction should help most.'

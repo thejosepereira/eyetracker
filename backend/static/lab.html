@@ -451,6 +451,12 @@
     const blur = opts.overrideBlur || prescriptionToBlur(prescription, opts.viewingDistanceMm || 350,
       opts.ppi || 264, { correctionStrength: opts.correctionStrength, ageYears: opts.ageYears,
                          pupilMm: opts.pupilMm, sigmaPerDiameter: opts.sigmaPerDiameter });
+    // Scale the contrast squeeze by how much blur there actually is: with ~no
+    // blur to invert, DON'T grey the image (was turning black text grey for no
+    // benefit). drEff -> 1 (no squeeze) at the sigma floor, -> dr for real blur.
+    const _maxSig = Math.max(blur.sigmaX, blur.sigmaY);
+    const _blurAmt = Math.min(1, Math.max(0, (_maxSig - 0.36) / (1.5 - 0.36)));
+    const drEff = precomp ? 1 - (1 - dr) * _blurAmt : dr;
     const built = buildPsf(blur, opts.psfType, opts.softness);
     const psf = built.psf, ksize = built.ksize;
     // Optional band-limit cutoff (cycles/px) just below the disk-OTF first null.
@@ -470,9 +476,9 @@
       const Rl = new Float64Array(N), Gl = new Float64Array(N), Bl = new Float64Array(N), Y = new Float64Array(N);
       for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
         const sx = Math.min(x, W - 1), sy = Math.min(y, H - 1), i = y * PW + x, o = (sy * W + sx) * 4;
-        const r = 0.5 + (srgbToLinear(rgba[o] / 255) - 0.5) * dr;
-        const g = 0.5 + (srgbToLinear(rgba[o + 1] / 255) - 0.5) * dr;
-        const b = 0.5 + (srgbToLinear(rgba[o + 2] / 255) - 0.5) * dr;
+        const r = 0.5 + (srgbToLinear(rgba[o] / 255) - 0.5) * drEff;
+        const g = 0.5 + (srgbToLinear(rgba[o + 1] / 255) - 0.5) * drEff;
+        const b = 0.5 + (srgbToLinear(rgba[o + 2] / 255) - 0.5) * drEff;
         Rl[i] = r; Gl[i] = g; Bl[i] = b; Y[i] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
       }
       const Ytar = blCutoff > 0 ? bandLimit(Y, PW, PH, blCutoff) : Y;
@@ -500,7 +506,7 @@
       for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
         const sx = Math.min(x, W - 1), sy = Math.min(y, H - 1);
         const lin = srgbToLinear(rgba[(sy * W + sx) * 4 + c] / 255);
-        chan[y * PW + x] = 0.5 + (lin - 0.5) * dr;         // contrast reduction
+        chan[y * PW + x] = 0.5 + (lin - 0.5) * drEff;         // contrast reduction
       }
       let res;
       if (precomp) {
